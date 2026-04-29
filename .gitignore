@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# runtime state
+state/
+
+# local artifacts
+.DS_Store
+*.log
+*.tmp
+
+# build/cache
+dist/
+build/
+.cache/
+coverage/
