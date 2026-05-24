@@ -2,6 +2,28 @@
 
 Use real-mode tests as the primary signal. The runtime depends on the configured OpenAI-compatible provider for cortex and organ cognition.
 
+## CLI UX
+
+Use single-turn mode for isolated checks:
+
+```bash
+bun run dev -- "What are you?"
+```
+
+Use chat mode for day-to-day testing without restarting the CLI:
+
+```bash
+bun run chat
+```
+
+Inside chat mode, `/verbose on` and `/verbose off` toggle internal output for subsequent turns. Verbose mode shows the event, organ questions, organ answers, cortex output, command results, and final user response.
+
+For one-off verbose debugging:
+
+```bash
+bun run dev -- --verbose "What are you?"
+```
+
 ## Self-model
 
 Commands:

@@ -49,6 +49,18 @@ cp .env.example .env
 bun run dev -- "What do you know about yourself?"
 ```
 
+For an interactive local session:
+
+```bash
+bun run chat
+```
+
+For one-off debugging, verbose mode shows the event, organ questions, organ answers, cortex output, command results, and final user response:
+
+```bash
+bun run dev -- --verbose "What are you?"
+```
+
 The provider must expose an OpenAI-compatible chat API.
 
 ## Reset local state

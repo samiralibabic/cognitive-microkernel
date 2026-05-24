@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.ts",
-    "turn": "bun run src/index.ts",
+    "chat": "bun run src/index.ts --chat",
     "reset": "rm -rf state && mkdir -p state"
   },
   "engines": {
