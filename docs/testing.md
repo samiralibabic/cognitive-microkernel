@@ -100,6 +100,36 @@ Failure means:
 
 - environment provenance is not represented clearly
 
+## Recorder audit chronology
+
+Command:
+
+```bash
+bun run chat
+```
+
+Inside chat:
+
+```txt
+> /verbose on
+> was it recorded with timestamps? and was it stored?
+> do you have a chronological list of days on which we talked?
+```
+
+Expected:
+
+- recorder is consulted for timestamp, storage, and chronology questions
+- recorder says local logs are timestamped when records exist
+- recorder returns earliest/latest recorded events and days/counts
+- recorder includes recent user-message chronology when extractable
+- response limits claims to local runtime logs since state creation or reset
+
+Failure means:
+
+- recorder is not being consulted for audit/history questions
+- recorder cannot read or summarize its own JSONL logs
+- cortex is ignoring recorder evidence or overclaiming beyond local runtime state
+
 ## Test-context hygiene
 
 Commands:

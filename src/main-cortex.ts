@@ -23,6 +23,7 @@ Rules:
 - Episodic is relevant for recent-turn continuity, references like "what do you mean", "that/this/it", and questions about the last message.
 - Memory is for durable facts/preferences/decisions, not raw short-term transcript.
 - Environment is relevant for system/code/file/runtime events and sometimes for local implementation tasks.
+- Recorder is relevant for questions about logs, timestamps, storage/recording, recorded history, chronological order, earliest/latest events, what happened in the system, what was logged, or failures.
 - Do not answer the user yet.
 - Do not ask organs to mutate state in this phase.`,
       },
@@ -58,6 +59,7 @@ Rules:
 - Use episodic for short-term continuity; use memory only for durable facts/preferences/decisions.
 - Do not directly mutate state; delegate to organs.
 - Do not invent memory/tool/self facts not present in organ answers.
+- If recorder provides audit/history evidence, use it as the source and limit claims to local runtime logs since state creation or reset. Recorder logs are stored local runtime state; distinguish them from the memory organ, but do not call them non-durable when recorder reports stored records. Do not infer that nothing happened before the earliest local log; say only that recorder has no local records before then.
 - If the event is internal/system and communication is unnecessary, omit userResponse but still command recorder/organs as needed.`,
       },
       { role: "user", content: JSON.stringify({ event, organAnswers }, null, 2) },

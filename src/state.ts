@@ -35,6 +35,18 @@ export async function appendJsonl(file: string, value: unknown): Promise<void> {
   await appendFile(statePath(file), JSON.stringify(value) + "\n", "utf8");
 }
 
+export async function readJsonl<T = unknown>(file: string): Promise<T[]> {
+  await ensureStateDir();
+  const p = statePath(file);
+  if (!existsSync(p)) return [];
+  const raw = await readFile(p, "utf8");
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as T);
+}
+
 export function nowIso() {
   return new Date().toISOString();
 }

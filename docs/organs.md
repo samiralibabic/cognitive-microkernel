@@ -236,6 +236,8 @@ Answers:
 - “What happened in the system?”
 - “What was logged?”
 - “What failed?”
+- “Was this recorded or stored with timestamps?”
+- “Which days have local recorded conversation events?”
 
 Updates:
 
@@ -247,5 +249,8 @@ Should not:
 - replace episodic memory
 - replace durable memory
 - be used as the main context source for normal conversation
+- claim access to conversations before this local runtime state existed or before state was reset
 
-Status: implemented in basic form.
+Status: implemented with append-only logging and basic local log queries.
+
+Recorder can summarize local runtime chronology from its own logs, including event/action counts, earliest/latest recorded events, recorded days, user-message counts by day, recent user messages, and recent command problems. This is audit/history for local runtime state only, not full ChatGPT history.
