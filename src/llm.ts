@@ -6,15 +6,13 @@ export type ChatMessage = {
 };
 
 export type LlmConfig = {
-  mock: boolean;
   baseUrl: string;
   apiKey?: string;
   model: string;
 };
 
-export function loadLlmConfig(mock: boolean): LlmConfig {
+export function loadLlmConfig(): LlmConfig {
   return {
-    mock,
     baseUrl: process.env.LLM_BASE_URL || "https://api.openai.com/v1",
     apiKey: process.env.LLM_API_KEY,
     model: process.env.LLM_MODEL || "gpt-4.1-mini",
@@ -24,16 +22,9 @@ export function loadLlmConfig(mock: boolean): LlmConfig {
 export class LlmClient {
   constructor(private readonly config: LlmConfig) {}
 
-  isMock() {
-    return this.config.mock;
-  }
-
   async chatText(messages: ChatMessage[], opts?: { temperature?: number }): Promise<string> {
-    if (this.config.mock) {
-      return "MOCK_LLM_RESPONSE";
-    }
     if (!this.config.apiKey) {
-      throw new Error("LLM_API_KEY is missing. Use --mock for local dry-run mode, or set LLM_API_KEY / LLM_BASE_URL / LLM_MODEL.");
+      throw new Error("LLM_API_KEY is missing. Set LLM_API_KEY / LLM_BASE_URL / LLM_MODEL in .env or environment variables.");
     }
 
     const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`, {

@@ -48,20 +48,6 @@ export class DrivesOrgan implements Organ {
     );
     const goalIntent = looksGoalRelevant(question.event.content);
 
-    if (this.llm.isMock()) {
-      const active = goals.filter((g) => g.status === "active").sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
-      const selected = candidates[0] ?? (goalIntent ? active[0] : undefined);
-      return {
-        organ: this.name,
-        relevant: Boolean(selected),
-        confidence: selected ? 0.82 : 0.75,
-        summary: selected
-          ? `Active goal: ${selected.summary}. Next step: ${selected.next_step ?? "not set"}.`
-          : "No goal context appears relevant to this event.",
-        evidence: selected ? [{ id: selected.id, status: selected.status, next_step: selected.next_step }] : [],
-      };
-    }
-
     return this.llm.chatJson<OrganAnswer>([
       {
         role: "system",
@@ -79,23 +65,6 @@ Rules:
 
   async act(command: OrganCommand, event: Event): Promise<OrganResult> {
     const goals = await this.load();
-
-    if (this.llm.isMock()) {
-      const payload = command.payload as Record<string, unknown>;
-      const goalText = String(payload.goal ?? payload.summary ?? "Build a lean organ-based agent runtime v0.");
-      let goal = goals.find((g) => g.summary.toLowerCase().includes(goalText.toLowerCase()) || goalText.toLowerCase().includes(g.summary.toLowerCase()))
-        ?? goals.find((g) => g.id === "build-organ-runtime-v0");
-      if (!goal) {
-        goal = { id: makeId("goal"), summary: goalText, status: "active", created_at: nowIso(), updated_at: nowIso(), notes: [] };
-        goals.push(goal);
-      }
-      if (payload.next_step) goal.next_step = String(payload.next_step);
-      if (payload.status && ["active", "blocked", "done", "stale"].includes(String(payload.status))) goal.status = payload.status as GoalRecord["status"];
-      goal.notes = [...(goal.notes ?? []), `Event ${event.id}: ${command.reason ?? command.operation}`];
-      goal.updated_at = nowIso();
-      await this.save(goals);
-      return { target: this.name, operation: command.operation, status: "accepted", summary: `Updated goal ${goal.id}.`, data: goal };
-    }
 
     const decision = await this.llm.chatJson<{
       status: "accepted" | "rejected";

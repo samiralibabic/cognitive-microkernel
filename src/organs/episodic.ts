@@ -47,39 +47,6 @@ export class EpisodicOrgan implements Organ {
     const recent = state.turns.slice(-RECENT_TURNS);
     const needsContinuity = looksLikeContinuityRequest(question.event.content);
 
-    if (this.llm.isMock()) {
-      if (recent.length === 0) {
-        return {
-          organ: this.name,
-          relevant: false,
-          confidence: 0.75,
-          summary: "No recent episodic turns stored yet.",
-          evidence: [],
-        };
-      }
-
-      const last = recent[recent.length - 1];
-      const recentSummary = recent.map((t, idx) => {
-        const n = recent.length - idx;
-        const user = t.user_message ? `user: ${truncate(t.user_message, 140)}` : undefined;
-        const assistant = t.assistant_response ? `assistant: ${truncate(t.assistant_response, 180)}` : undefined;
-        return `-${n}: ${[user, assistant].filter(Boolean).join(" | ")}`;
-      }).join("\n");
-
-      return {
-        organ: this.name,
-        relevant: needsContinuity || recent.length > 0,
-        confidence: needsContinuity ? 0.92 : 0.7,
-        summary: [
-          `Working summary: ${state.working_summary}`,
-          last?.user_message ? `Previous user message: ${last.user_message}` : undefined,
-          last?.assistant_response ? `Previous assistant response: ${last.assistant_response}` : undefined,
-          needsContinuity ? "The current request appears to refer to recent conversation context." : "Recent turns are available for continuity if needed.",
-        ].filter(Boolean).join("\n"),
-        evidence: [{ working_summary: state.working_summary, recent_turns: recentSummary }],
-      };
-    }
-
     return this.llm.chatJson<OrganAnswer>([
       {
         role: "system",
@@ -157,15 +124,6 @@ Rules:
   }
 
   private async updateWorkingSummary(state: EpisodicState, turn: EpisodicTurn): Promise<string> {
-    if (this.llm.isMock()) {
-      const previous = state.working_summary === DEFAULT_STATE.working_summary ? "" : state.working_summary;
-      const addition = [
-        turn.user_message ? `User: ${truncate(turn.user_message, 220)}` : undefined,
-        turn.assistant_response ? `Assistant: ${truncate(turn.assistant_response, 260)}` : undefined,
-      ].filter(Boolean).join(" | ");
-      return truncate([previous, addition].filter(Boolean).join("\n"), 2500) || DEFAULT_STATE.working_summary;
-    }
-
     const result = await this.llm.chatJson<{ summary: string }>([
       {
         role: "system",
@@ -189,8 +147,4 @@ Rules:
 
 function looksLikeContinuityRequest(text: string): boolean {
   return /\b(what do you mean|what did you mean|what are you talking about|defined where|where did.*define|last question|last message|previous|earlier|above|before|continue|where were we|what organ|which organ|what was my|what did i|that|this|it)\b/i.test(text);
-}
-
-function truncate(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }

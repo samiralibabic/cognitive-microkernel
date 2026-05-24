@@ -1,33 +1,42 @@
 import { runTurn } from "./runtime";
 
+const KNOWN_FLAGS = new Set(["--verbose", "-v", "--system"]);
+
 function parseArgs(argv: string[]) {
-  const flags = new Set(argv.filter((a) => a.startsWith("--")));
-  const positional = argv.filter((a) => !a.startsWith("--"));
+  const unknownFlags = argv.filter((a) => a.startsWith("-") && !KNOWN_FLAGS.has(a));
+  const positional = argv.filter((a) => !KNOWN_FLAGS.has(a) && !unknownFlags.includes(a));
   const message = positional.join(" ").trim();
   return {
     message,
-    mock: flags.has("--mock"),
-    verbose: flags.has("--verbose") || flags.has("-v"),
-    type: flags.has("--system") ? "system_event" as const : "user_message" as const,
+    unknownFlags,
+    verbose: argv.includes("--verbose") || argv.includes("-v"),
+    type: argv.includes("--system") ? "system_event" as const : "user_message" as const,
   };
+}
+
+function usage() {
+  return `Usage:
+  bun run dev -- "What should we do next?"
+
+Flags:
+  --verbose, -v   Print internal organ questions/answers/commands.
+  --system        Treat message as system_event instead of user_message.
+`;
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.message) {
-    console.error(`Usage:
-  bun run dev -- --mock "Build organ runtime v0"
-  bun run dev -- "What should we do next?"
-
-Flags:
-  --mock      Run without LLM credentials; deterministic wiring test.
-  --verbose   Print internal organ questions/answers/commands.
-  --system    Treat message as system_event instead of user_message.
-`);
+  if (args.unknownFlags.length) {
+    console.error(`Unknown flag(s): ${args.unknownFlags.join(", ")}\n\n${usage()}`);
     process.exit(1);
   }
 
-  const result = await runTurn(args.message, { mock: args.mock, verbose: args.verbose, type: args.type });
+  if (!args.message) {
+    console.error(usage());
+    process.exit(1);
+  }
+
+  const result = await runTurn(args.message, { verbose: args.verbose, type: args.type });
 
   if (args.verbose) {
     console.log("\n--- EVENT ---");

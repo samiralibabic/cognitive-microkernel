@@ -41,25 +41,6 @@ export class MemoryOrgan implements Organ {
       12,
     );
 
-    if (this.llm.isMock()) {
-      if (candidates.length === 0) {
-        return {
-          organ: this.name,
-          relevant: false,
-          confidence: 0.6,
-          summary: "No active durable memory matched this event in mock mode.",
-          evidence: [],
-        };
-      }
-      return {
-        organ: this.name,
-        relevant: true,
-        confidence: Math.min(0.9, 0.55 + candidates[0]._score),
-        summary: `Relevant memory: ${candidates.slice(0, 3).map((m) => m.summary).join(" | ")}`,
-        evidence: candidates.slice(0, 5).map(({ _score, ...m }) => ({ id: m.id, type: m.type, summary: m.summary, confidence: m.confidence, status: m.status ?? "active" })),
-      };
-    }
-
     return this.llm.chatJson<OrganAnswer>([
       {
         role: "system",
@@ -109,43 +90,6 @@ Rules:
         summary: count ? `Deactivated ${count} matching durable memor${count === 1 ? "y" : "ies"}.` : "No matching active durable memory found to deactivate.",
         data: { deactivated_count: count },
       };
-    }
-
-    if (this.llm.isMock()) {
-      if (["store", "store_or_update", "update"].includes(command.operation)) {
-        const content = String(payload.content ?? payload.summary ?? JSON.stringify(payload));
-        if (looksTestOnly(content) || looksTestOnly(event.content)) {
-          return {
-            target: this.name,
-            operation: command.operation,
-            status: "accepted",
-            summary: "Ignored test-only context for durable memory.",
-            data: { ignored: true },
-          };
-        }
-        const record: MemoryRecord = {
-          id: makeId("mem"),
-          type: String(payload.type ?? "note"),
-          content,
-          summary: String(payload.summary ?? content.slice(0, 220)),
-          tags: Array.isArray(payload.tags) ? payload.tags.map(String) : [],
-          confidence: typeof payload.confidence === "number" ? payload.confidence : 0.75,
-          status: "active",
-          source: event.id,
-          created_at: nowIso(),
-          updated_at: nowIso(),
-        };
-        records.push(record);
-        await this.save(records);
-        return {
-          target: this.name,
-          operation: command.operation,
-          status: "accepted",
-          summary: `Stored durable memory.`,
-          data: { id: record.id },
-        };
-      }
-      return { target: this.name, operation: command.operation, status: "rejected", summary: "Memory mock mode only supports store/store_or_update/update/deactivate_matching." };
     }
 
     const decision = await this.llm.chatJson<{

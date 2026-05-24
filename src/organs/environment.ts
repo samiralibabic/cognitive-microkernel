@@ -23,16 +23,6 @@ export class EnvironmentOrgan implements Organ {
       } catch {}
     }
 
-    if (this.llm.isMock()) {
-      return {
-        organ: this.name,
-        relevant: true,
-        confidence: 0.7,
-        summary: `Environment cwd=${observations.cwd}; package=${(observations.package as any)?.name ?? "none"}; state_dir=${observations.has_state_dir}.`,
-        evidence: [observations],
-      };
-    }
-
     return this.llm.chatJson<OrganAnswer>([
       {
         role: "system",

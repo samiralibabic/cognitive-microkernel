@@ -43,7 +43,6 @@ export class CommunicationsOrgan implements Organ {
 
   async renderUserResponse(event: Event, draft: string, organAnswers: OrganAnswer[]): Promise<string> {
     const profile = await this.load();
-    if (this.llm.isMock()) return draft.trim();
 
     const rendered = await this.llm.chatJson<{ response: string }>([
       {

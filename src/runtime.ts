@@ -5,7 +5,6 @@ import { createOrgans, organInfos } from "./registry";
 import { makeId, nowIso } from "./state";
 
 export type RunOptions = {
-  mock: boolean;
   verbose: boolean;
   source?: string;
   type?: Event["type"];
@@ -25,7 +24,7 @@ export type RunTurnResult = {
 };
 
 export async function runTurn(content: string, options: RunOptions): Promise<RunTurnResult> {
-  const llm = new LlmClient(loadLlmConfig(options.mock));
+  const llm = new LlmClient(loadLlmConfig());
   const { registry, recorder, communications } = createOrgans(llm);
   const cortex = new MainCortex(llm);
 

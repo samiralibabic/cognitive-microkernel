@@ -71,18 +71,6 @@ export class ToolsOrgan implements Organ {
       10,
     );
 
-    if (this.llm.isMock()) {
-      const selected = candidates.length ? candidates : tools.slice(0, 3).map((t) => ({ ...t, _score: 0.1 }));
-      return {
-        organ: this.name,
-        relevant: true,
-        confidence: 0.75,
-        summary: `Relevant capabilities: ${selected.map((t) => `${t.capability} (${t.risk} risk)`).join(", ")}.`,
-        evidence: selected.map(({ _score, ...t }) => t),
-        warnings: selected.filter((t) => t.requires_permission).map((t) => `${t.capability} requires permission.`),
-      };
-    }
-
     return this.llm.chatJson<OrganAnswer>([
       {
         role: "system",

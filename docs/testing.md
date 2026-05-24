@@ -1,6 +1,6 @@
 # Testing
 
-Use real-mode tests as the primary signal. Mock mode can prove plumbing, but canned replies can hide behavior issues.
+Use real-mode tests as the primary signal. The runtime depends on the configured OpenAI-compatible provider for cortex and organ cognition.
 
 ## Self-model
 

@@ -62,18 +62,6 @@ export class SelfModelOrgan implements Organ {
     const state = await this.load();
     const relevant = looksSelfRelevant(question.event.content) || looksSelfRelevant(question.question);
 
-    if (this.llm.isMock()) {
-      return {
-        organ: this.name,
-        relevant,
-        confidence: relevant ? 0.9 : 0.55,
-        summary: relevant
-          ? `Self-model: ${state.role} Architecture: ${state.architecture} Organs: ${state.organs.map((o) => o.name).join(", ")}. Limits: ${state.limitations.join("; ")}.`
-          : "Self-model available; current event is not primarily about system identity/capabilities.",
-        evidence: relevant ? [state] : [{ system_name: state.system_name, role: state.role }],
-      };
-    }
-
     return this.llm.chatJson<OrganAnswer>([
       {
         role: "system",
