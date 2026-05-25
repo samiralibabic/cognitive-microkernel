@@ -58,7 +58,8 @@ export type LlmChatResponse = {
 export type ChatOptions = {
   temperature?: number;
   tools?: LlmTool[];
-  tool_choice?: "auto" | "none" | { type: "function"; function: { name: string } };
+  tool_choice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
+  parallel_tool_calls?: boolean;
   response_format?: unknown;
   max_tokens?: number;
 };
@@ -92,6 +93,7 @@ export class LlmClient {
     };
     if (opts?.tools) body.tools = opts.tools;
     if (opts?.tool_choice) body.tool_choice = opts.tool_choice;
+    if (opts?.parallel_tool_calls !== undefined) body.parallel_tool_calls = opts.parallel_tool_calls;
     if (opts?.response_format) body.response_format = opts.response_format;
     if (opts?.max_tokens) body.max_tokens = opts.max_tokens;
 

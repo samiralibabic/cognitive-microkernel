@@ -14,6 +14,9 @@ Included:
 - no internal IDs in normal replies
 - clearer “how do you know?” provenance behavior
 - no overclaiming capabilities
+- bounded consultation rounds
+- native tool-calling control outputs
+- model tool trace for verbose debugging
 
 Excluded:
 
@@ -27,6 +30,25 @@ Done when:
 - a new reader can understand the repo in under 10 minutes
 - current behavior matches the docs
 - local state/secrets are not committed
+
+## Phase 1b — Native tool-calling control plane
+
+Status: done/current.
+
+Goal: make structured model control flow explicit, traceable, and fail-closed.
+
+Included:
+
+- final tools for cortex planning, cortex finalization, organ answers, and communications rendering
+- required tool output for structured calls with multiple allowed tools
+- `parallel_tool_calls: false` in the harness
+- observation-before-finalization when runtime tools and final tools appear together
+- protocol-error traces for stop-without-tool and malformed final output
+
+Done when:
+
+- `bun run test:harness` passes
+- verbose mode shows model tool trace entries for model calls, tool calls, tool results, and protocol errors
 
 ## Phase 2 — Read-only project awareness
 

@@ -87,3 +87,53 @@ Initial boundary:
 - no arbitrary home-directory access
 - no writes
 - every read logged
+
+## 0010 — Bounded consultation rounds
+
+Status: accepted
+
+Decision: allow the cortex at most two consultation rounds before finalizing.
+
+Reason: one targeted follow-up round gives the cortex a way to repair missing evidence without creating open-ended organ chatter.
+
+Consequence: organs still do not coordinate with each other; any follow-up questions remain cortex-owned and bounded.
+
+## 0011 — Native tool-calling harness
+
+Status: accepted
+
+Decision: use OpenAI/OpenRouter-compatible native tool calls for structured cortex and organ control outputs.
+
+Reason: free-form JSON parsing made control flow brittle and caused user-turn crashes when model text was not parseable JSON.
+
+Consequence: model calls now produce traceable tool calls, finish reasons, tool results, and protocol errors.
+
+## 0012 — Final tools are control outputs
+
+Status: accepted
+
+Decision: represent structured method completion as final tools such as `final_organ_questions`, `final_organ_answer`, `continue_consultation`, `final_cortex_output`, and `final_rendered_response`.
+
+Reason: final tools give each model method an explicit typed exit path instead of relying on assistant prose.
+
+Consequence: structured calls fail closed with protocol warnings or fallbacks instead of accepting malformed plain text.
+
+## 0013 — Capability status classification
+
+Status: accepted
+
+Decision: tool capabilities carry explicit status values: `implemented`, `registered_not_executable`, `planned`, or `deprecated`.
+
+Reason: a listed or planned capability is not the same as an executable runtime capability.
+
+Consequence: the tools organ must report `mcp_adapter` as planned and must not present registered-only capabilities as available execution paths.
+
+## 0014 — Observe tools before finalization
+
+Status: accepted
+
+Decision: do not accept a `final_*` tool call from a model response that also contains non-final runtime tool calls.
+
+Reason: accepting early final output can skip evidence-gathering tools and make unsupported answers look evidence-based.
+
+Consequence: the harness executes non-final tools first, returns a premature-finalization warning for same-message final calls, and accepts final output only after tool results have been observed in a later model response.

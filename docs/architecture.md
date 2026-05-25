@@ -34,6 +34,8 @@ The cortex may run up to two consultation rounds before finalizing a response. R
 
 Model calls use a native OpenAI/OpenRouter-compatible tool-calling harness for structured control decisions. The model may request tool calls, but the runtime validates arguments, executes only tools exposed for that cortex or organ method, returns tool results as `role: "tool"` messages, and stops only when a required final tool returns structured output. Final cortex and organ sense outputs are explicit final tool calls, not free-form JSON text.
 
+When runtime tools and final tools are both available, the harness uses required tool output and `parallel_tool_calls: false`. If one model response contains both non-final tools and `final_*` tools, the runtime executes only the non-final tools, returns a premature-finalization tool warning for the final calls, and does not accept final output until a later model response has observed the tool results.
+
 ## Cortex responsibilities
 
 The cortex should:

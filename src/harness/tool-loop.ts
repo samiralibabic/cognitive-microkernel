@@ -1,4 +1,4 @@
-import type { ChatMessage, LlmAssistantMessage, LlmClient, LlmToolMessage } from "../llm";
+import type { ChatMessage, ChatOptions, LlmAssistantMessage, LlmClient, LlmToolCall, LlmToolMessage } from "../llm";
 import { parseJsonArgs, toLlmTool, type ModelTraceKind, type ModelTracePayload, type RuntimeTool, type ToolTraceRecorder } from "./tooling";
 
 export type ToolLoopTraceItem = ModelTracePayload & {
@@ -41,6 +41,7 @@ export async function runToolCallingLoop<TFinal>(args: {
       temperature: args.temperature,
       tools: args.tools.map(toLlmTool),
       tool_choice: toolChoice,
+      parallel_tool_calls: false,
     });
     const choice = response.choices[0];
     const message = choice?.message;
@@ -65,20 +66,41 @@ export async function runToolCallingLoop<TFinal>(args: {
       tool_call_names: toolCallNames,
     }));
 
-    const finalCall = toolCalls.find((call) => finalToolNames.has(call.function.name));
-    if (finalCall) {
+    const finalCalls = toolCalls.filter((call) => finalToolNames.has(call.function.name));
+    const nonFinalCalls = toolCalls.filter((call) => !finalToolNames.has(call.function.name));
+
+    if (nonFinalCalls.length === 0 && finalCalls.length > 1) {
+      const error = `Expected exactly one final tool call, got ${formatToolNames(finalCalls)}.`;
+      await protocolError(trace, args.recorder, args, step, error);
+      messages.push(toAssistantMessage(message));
+
+      const toolMessages: LlmToolMessage[] = [];
+      for (const call of finalCalls) {
+        await recordTrace(trace, args.recorder, "model_tool_result", metadata(args, step, {
+          tool: call.function.name,
+          ok: false,
+          error,
+        }));
+        toolMessages.push(toolMessage(call.id, call.function.name, { ok: false, tool: call.function.name, error }));
+      }
+      messages.push(...toolMessages);
+      continue;
+    }
+
+    if (nonFinalCalls.length === 0 && finalCalls.length === 1) {
+      const finalCall = finalCalls[0];
       try {
         const finalArgs = parseJsonArgs(finalCall.function.arguments);
         return { final: args.parseFinal(finalCall.function.name, finalArgs), trace };
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         await protocolError(trace, args.recorder, args, step, `Invalid final tool output from ${finalCall.function.name}: ${error}`);
+        messages.push(toAssistantMessage(message));
         await recordTrace(trace, args.recorder, "model_tool_result", metadata(args, step, {
           tool: finalCall.function.name,
           ok: false,
           error,
         }));
-        messages.push(toAssistantMessage(message));
         messages.push(toolMessage(finalCall.id, finalCall.function.name, { ok: false, tool: finalCall.function.name, error }));
         continue;
       }
@@ -87,7 +109,23 @@ export async function runToolCallingLoop<TFinal>(args: {
     messages.push(toAssistantMessage(message));
     const toolMessages: LlmToolMessage[] = [];
 
+    if (finalCalls.length > 0) {
+      const error = `Ignored premature final tool call(s) ${formatToolNames(finalCalls)} because non-final tool call(s) ${formatToolNames(nonFinalCalls)} must be observed first.`;
+      await protocolError(trace, args.recorder, args, step, error);
+    }
+
     for (const call of toolCalls) {
+      if (finalToolNames.has(call.function.name)) {
+        const error = "Premature final tool call ignored. Tool results must be observed before finalization.";
+        await recordTrace(trace, args.recorder, "model_tool_result", metadata(args, step, {
+          tool: call.function.name,
+          ok: false,
+          error,
+        }));
+        toolMessages.push(toolMessage(call.id, call.function.name, { ok: false, tool: call.function.name, error }));
+        continue;
+      }
+
       const tool = toolByName.get(call.function.name);
       if (!tool) {
         const error = `Unknown tool '${call.function.name}'.`;
@@ -129,12 +167,16 @@ export async function runToolCallingLoop<TFinal>(args: {
   throw new ToolProtocolError(error);
 }
 
-function defaultToolChoice(tools: RuntimeTool[], finalToolNames: string[]) {
-  const nonFinalTools = tools.filter((tool) => !finalToolNames.includes(tool.name));
-  if (nonFinalTools.length === 0 && finalToolNames.length === 1) {
+function defaultToolChoice(tools: RuntimeTool[], finalToolNames: string[]): ChatOptions["tool_choice"] {
+  if (tools.length === 1 && finalToolNames.includes(tools[0].name)) {
     return { type: "function" as const, function: { name: finalToolNames[0] } };
   }
+  if (tools.length > 1 && finalToolNames.length > 0) return "required";
   return "auto" as const;
+}
+
+function formatToolNames(toolCalls: LlmToolCall[]): string {
+  return `[${toolCalls.map((call) => call.function.name).join(", ")}]`;
 }
 
 function toAssistantMessage(message: LlmAssistantMessage | undefined): LlmAssistantMessage {

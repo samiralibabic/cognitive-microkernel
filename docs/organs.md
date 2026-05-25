@@ -4,6 +4,12 @@ An organ is a specialist LLM-backed subsystem with bounded responsibility and ow
 
 A database, vector index, helper function, or JSON file is not an organ. Those are implementation details inside an organ.
 
+## LLM-backed sense contract
+
+LLM-backed `sense()` calls use the native tool-calling harness and must return through `final_organ_answer`. The runtime validates and normalizes that final output before the cortex sees it.
+
+If an organ exposes runtime tools, such as recorder's `query_audit_log`, those tools must run before finalization. A `final_organ_answer` emitted in the same model response as a non-final tool is treated as premature and is not accepted until the model observes the tool result.
+
 ## Episodic organ
 
 Purpose: short-term conversational continuity.
@@ -136,6 +142,7 @@ Purpose: capability awareness.
 Owns:
 
 - available tool/capability registry
+- capability status: `implemented`, `registered_not_executable`, `planned`, or `deprecated`
 - permission metadata
 - intended usage patterns
 - risk notes
@@ -157,9 +164,10 @@ Should not:
 
 - expose a giant raw tool list to the cortex
 - claim a capability only because it is planned
+- claim registered-only capabilities are executable
 - execute side effects without permission boundaries
 
-Status: scaffolded/basic. Real file/code tools are not implemented yet.
+Status: implemented as a capability registry. Real file/code tools are not implemented yet, and planned or registered-only capabilities must be reported as unavailable for current execution.
 
 ## Environment organ
 

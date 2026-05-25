@@ -126,6 +126,7 @@ Expected:
 - recorder includes recent user-message chronology when extractable
 - response limits claims to local runtime logs since state creation or reset
 - model tool trace includes finish reasons, native finish reasons when provided, tool call names, and usage when provided
+- model tool trace shows `query_audit_log` result before accepted `final_organ_answer` for timestamp/storage claims
 
 Failure means:
 
@@ -154,6 +155,27 @@ Failure means:
 
 - control flow is still relying on free-form JSON text
 - capability status is not being respected
+
+## Tool-loop ordering regression
+
+Command:
+
+```bash
+bun run test:harness
+```
+
+Expected:
+
+- simulated recorder model response emits `query_audit_log` and premature `final_organ_answer` in the same response
+- harness runs `query_audit_log`
+- premature `final_organ_answer` is returned to the model as a protocol warning, not accepted
+- second model response sees the audit-log result and then finalizes
+- trace records the premature finalization protocol error
+
+Failure means:
+
+- final tools can still bypass required evidence-gathering tools
+- `tool_choice` or `parallel_tool_calls` harness settings regressed
 
 ## Test-context hygiene
 
