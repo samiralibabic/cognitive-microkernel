@@ -147,6 +147,7 @@ bun run dev -- --verbose "can you use MCP right now?"
 Expected:
 
 - cortex planning, organ sense, and cortex finalization use native tool calls
+- ordinary turns should not include model trace entries for `communications.renderUserResponse`
 - verbose output includes `--- MODEL TOOL TRACE ---`
 - organ answers have string summaries, even if a model output needed normalization
 - MCP is reported as planned, not implemented or currently executable

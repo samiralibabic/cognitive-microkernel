@@ -27,7 +27,7 @@ export type RunTurnResult = {
 
 export async function runTurn(content: string, options: RunOptions): Promise<RunTurnResult> {
   const llm = new LlmClient(loadLlmConfig());
-  const { registry, recorder, communications } = createOrgans(llm);
+  const { registry, recorder } = createOrgans(llm);
   const cortex = new MainCortex(llm);
 
   const event: Event = {
@@ -78,7 +78,7 @@ export async function runTurn(content: string, options: RunOptions): Promise<Run
 
   let renderedResponse: string | undefined;
   if (cortexOutput.userResponse?.trim()) {
-    renderedResponse = await communications.renderUserResponse(event, cortexOutput.userResponse, answers, traceRecorder);
+    renderedResponse = cortexOutput.userResponse.trim();
     await recorder.record("communication_rendered", event, renderedResponse);
   }
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "chat": "bun run src/index.ts --chat",
+    "test:harness": "bun test",
     "reset": "rm -rf state && mkdir -p state"
   },
   "engines": {

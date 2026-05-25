@@ -225,7 +225,7 @@ Should not:
 - decide project goals
 - silently suppress important user-facing information
 
-Status: implemented in basic form.
+Status: implemented for profile/sense. Normal runtime emits cortex userResponse directly; Communications is not used as a post-cortex rendering pass.
 
 ## Recorder organ
 

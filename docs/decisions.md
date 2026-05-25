@@ -137,3 +137,13 @@ Decision: do not accept a `final_*` tool call from a model response that also co
 Reason: accepting early final output can skip evidence-gathering tools and make unsupported answers look evidence-based.
 
 Consequence: the harness executes non-final tools first, returns a premature-finalization warning for same-message final calls, and accepts final output only after tool results have been observed in a later model response.
+
+## 0015 — No normal-path communications render pass
+
+Status: accepted
+
+Decision: emit cortex userResponse directly instead of sending it through a second LLM communications render call.
+
+Reason: the render pass added latency, cost, trace noise, and another strict tool-call failure point after the cortex had already finalized.
+
+Consequence: Communications remains available for style/profile sensing and profile updates, but normal user-visible output comes directly from the cortex.

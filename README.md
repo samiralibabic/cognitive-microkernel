@@ -11,7 +11,7 @@ event
   -> selected organs answer via final_organ_answer
   -> cortex finalizes or requests one targeted round 2
   -> cortex finalizes via final_cortex_output
-  -> communications renders response if needed
+  -> runtime emits cortex userResponse directly
   -> organ commands execute
   -> recorder logs commands, model traces, and completion
 ```
@@ -34,7 +34,7 @@ The current prototype demonstrates:
 
 ## How model calls work now
 
-The runtime uses native tool calls for cortex planning, cortex finalization, organ sense answers, and communications rendering. Structured control data comes from explicit final tools such as `final_organ_questions`, `final_organ_answer`, `continue_consultation`, `final_cortex_output`, and `final_rendered_response`.
+The runtime uses native tool calls for cortex planning, cortex finalization, and organ sense answers. The final user-facing response is emitted directly from the cortex output to avoid an extra model-call failure point. Structured control data comes from explicit final tools such as `final_organ_questions`, `final_organ_answer`, `continue_consultation`, and `final_cortex_output`.
 
 When a method exposes both runtime tools and final tools, the harness requires tool output, disables parallel tool calls, executes non-final tools first, and only accepts a final tool after required tool results have been returned to the model. Plain-text `stop` responses are treated as protocol errors for these structured calls.
 

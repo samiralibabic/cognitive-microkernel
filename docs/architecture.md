@@ -24,13 +24,15 @@ The cortex is intentionally stateless or near-stateless. Continuity lives in org
 6. Cortex either finalizes or asks one targeted follow-up consultation round.
 7. If requested, selected organs answer consultation round 2.
 8. Cortex finalizes after at most two consultation rounds.
-9. Communications organ renders a response if needed.
+9. Runtime emits the cortex userResponse directly.
 10. Cortex sends commands back to organs.
 11. Organs update their own state.
 12. Recorder logs commands and results.
 ```
 
 The cortex may run up to two consultation rounds before finalizing a response. Round 1 always happens. Round 2 happens only when the cortex needs one more targeted organ answer. Organs never talk to each other; all coordination goes through the cortex.
+
+The Communications organ can still be consulted for style/profile guidance, but normal response emission does not run a second LLM rendering pass.
 
 Model calls use a native OpenAI/OpenRouter-compatible tool-calling harness for structured control decisions. The model may request tool calls, but the runtime validates arguments, executes only tools exposed for that cortex or organ method, returns tool results as `role: "tool"` messages, and stops only when a required final tool returns structured output. Final cortex and organ sense outputs are explicit final tool calls, not free-form JSON text.
 
