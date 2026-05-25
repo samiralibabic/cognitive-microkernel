@@ -115,7 +115,7 @@ test("tool loop observes recorder tool output before accepting final answer", as
   expect(prematureFinalIndex).toBeGreaterThanOrEqual(0);
 });
 
-test("cortex step uses one forced final_cortex_step tool", async () => {
+test("cortex step exposes only final_cortex_step and requires a tool call", async () => {
   const chatCalls: Array<{ messages: ChatMessage[]; opts?: ChatOptions }> = [];
   const fakeLlm = {
     async chat(messages: ChatMessage[], opts?: ChatOptions): Promise<LlmChatResponse> {
@@ -151,7 +151,97 @@ test("cortex step uses one forced final_cortex_step tool", async () => {
   expect(result.type).toBe("continue");
   expect(chatCalls).toHaveLength(1);
   expect(chatCalls[0].opts?.tools?.map((tool) => tool.function.name)).toEqual([finalCortexStepTool.name]);
-  expect(chatCalls[0].opts?.tool_choice).toEqual({ type: "function", function: { name: finalCortexStepTool.name } });
+  expect(chatCalls[0].opts?.tool_choice).toBe("required");
+});
+
+test("duplicate identical final tool calls are accepted as one final result", async () => {
+  const chatCalls: Array<{ messages: ChatMessage[]; opts?: ChatOptions }> = [];
+  const finalArgs = {
+    decision: "final",
+    userResponse: "Duplicate final calls were normalized.",
+    organCommands: [],
+    uncertainty: { level: "low", reason: "final output was complete" },
+  };
+  const fakeLlm = {
+    async chat(messages: ChatMessage[], opts?: ChatOptions): Promise<LlmChatResponse> {
+      chatCalls.push({ messages: structuredClone(messages) as ChatMessage[], opts });
+      return {
+        model: "fake-cortex-model",
+        choices: [{
+          finish_reason: "tool_calls",
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              toolCall("call_step_1", finalCortexStepTool.name, finalArgs),
+              toolCall("call_step_2", finalCortexStepTool.name, finalArgs),
+            ],
+          },
+        }],
+      };
+    },
+  } as unknown as LlmClient;
+
+  const event: Event = {
+    id: "evt_test",
+    type: "user_message",
+    content: "answer normally",
+    timestamp: "2026-05-25T00:00:00.000Z",
+    source: "test",
+  };
+  const cortex = new MainCortex(fakeLlm);
+  const result = await cortex.stepAfterConsultation(event, [{ round: 1, questions: [], answers: [] }], false);
+
+  expect(result.type).toBe("final");
+  expect(result.userResponse).toBe("Duplicate final calls were normalized.");
+  expect(chatCalls).toHaveLength(1);
+});
+
+test("user message final step requires userResponse", async () => {
+  const chatCalls: Array<{ messages: ChatMessage[]; opts?: ChatOptions }> = [];
+  const fakeLlm = {
+    async chat(messages: ChatMessage[], opts?: ChatOptions): Promise<LlmChatResponse> {
+      chatCalls.push({ messages: structuredClone(messages) as ChatMessage[], opts });
+      const hasToolError = messages.some((message) => message.role === "tool" && message.content.includes("non-empty userResponse"));
+      const finalArgs = hasToolError
+        ? {
+          decision: "final",
+          userResponse: "The answer is now visible to the user.",
+          organCommands: [],
+          uncertainty: { level: "low", reason: "userResponse present" },
+        }
+        : {
+          decision: "final",
+          organCommands: [{ target: "recorder", operation: "record_turn", payload: { content: "Hidden answer" } }],
+          uncertainty: { level: "low", reason: "answer was misplaced" },
+        };
+      return {
+        model: "fake-cortex-model",
+        choices: [{
+          finish_reason: "tool_calls",
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [toolCall(hasToolError ? "call_step_fixed" : "call_step_missing_response", finalCortexStepTool.name, finalArgs)],
+          },
+        }],
+      };
+    },
+  } as unknown as LlmClient;
+
+  const event: Event = {
+    id: "evt_test",
+    type: "user_message",
+    content: "answer visibly",
+    timestamp: "2026-05-25T00:00:00.000Z",
+    source: "test",
+  };
+  const cortex = new MainCortex(fakeLlm);
+  const result = await cortex.stepAfterConsultation(event, [{ round: 1, questions: [], answers: [] }], false);
+
+  expect(result.type).toBe("final");
+  expect(result.userResponse).toBe("The answer is now visible to the user.");
+  expect(chatCalls).toHaveLength(2);
 });
 
 test("missing tool calls fail closed without an extra retry", async () => {
@@ -159,7 +249,7 @@ test("missing tool calls fail closed without an extra retry", async () => {
   const fakeLlm = {
     async chat(_messages: ChatMessage[], opts?: ChatOptions): Promise<LlmChatResponse> {
       callCount += 1;
-      expect(opts?.tool_choice).toEqual({ type: "function", function: { name: finalOrganAnswerTool.name } });
+      expect(opts?.tool_choice).toBe("required");
       return {
         model: "fake-missing-tool-model",
         choices: [{

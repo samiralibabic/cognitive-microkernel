@@ -134,7 +134,7 @@ export function validateMainCortexOutput(args: unknown): MainCortexOutput {
   return output;
 }
 
-export function validateCortexStepOutput(args: unknown, canContinue: boolean): CortexStepOutput {
+export function validateCortexStepOutput(args: unknown, canContinue: boolean, requireUserResponse = false): CortexStepOutput {
   const obj = requireRecord(args, "cortex step output");
   const decision = requireString(obj.decision, "decision");
 
@@ -150,12 +150,14 @@ export function validateCortexStepOutput(args: unknown, canContinue: boolean): C
   }
 
   if (decision === "final") {
+    const output = validateMainCortexOutput({
+      userResponse: obj.userResponse,
+      organCommands: obj.organCommands ?? [],
+      uncertainty: obj.uncertainty,
+    });
+    if (requireUserResponse && !output.userResponse?.trim()) throw new Error("decision=final requires a non-empty userResponse for user_message events.");
     return {
-      ...validateMainCortexOutput({
-        userResponse: obj.userResponse,
-        organCommands: obj.organCommands ?? [],
-        uncertainty: obj.uncertainty,
-      }),
+      ...output,
       type: "final",
     };
   }

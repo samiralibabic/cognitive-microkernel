@@ -72,6 +72,7 @@ Consultation rules:
 - If you would need more information but cannot continue, finalize with explicit uncertainty.
 
 Final-answer rules:
+- For user_message events, decision="final" requires a non-empty userResponse. The user-facing answer belongs in userResponse; recorder or episodic commands are only state updates and are not a substitute for the reply.
 - Be decisive and personalized when organ context is sufficient.
 - Avoid generic if/then branching unless uncertainty is genuine and material.
 - If the user asks about your own feelings, identity, existence, capabilities, organs, self-awareness, internals, or what happened "on your end", use self_model context. Do not imply subjective feelings or biological consciousness.
@@ -93,7 +94,7 @@ Final-answer rules:
         ],
         tools: [finalCortexStepTool],
         finalToolNames: [finalCortexStepTool.name],
-        parseFinal: (_toolName, finalArgs) => validateCortexStepOutput(finalArgs, canContinue),
+        parseFinal: (_toolName, finalArgs) => validateCortexStepOutput(finalArgs, canContinue, event.type === "user_message"),
         maxSteps: 2,
         temperature: 0.2,
         recorder,

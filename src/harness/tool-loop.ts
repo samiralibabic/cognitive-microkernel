@@ -70,7 +70,10 @@ export async function runToolCallingLoop<TFinal>(args: {
     const nonFinalCalls = toolCalls.filter((call) => !finalToolNames.has(call.function.name));
 
     if (nonFinalCalls.length === 0 && finalCalls.length > 1) {
-      const error = `Expected exactly one final tool call, got ${formatToolNames(finalCalls)}.`;
+      const duplicateFinal = parseDuplicateFinal(finalCalls, args.parseFinal);
+      if (duplicateFinal.ok) return { final: duplicateFinal.final, trace };
+
+      const error = `Expected exactly one final tool call, got ${formatToolNames(finalCalls)}. ${duplicateFinal.error}`;
       await protocolError(trace, args.recorder, args, step, error);
       messages.push(toAssistantMessage(message));
 
@@ -167,9 +170,30 @@ export async function runToolCallingLoop<TFinal>(args: {
   throw new ToolProtocolError(error);
 }
 
+function parseDuplicateFinal<TFinal>(
+  finalCalls: LlmToolCall[],
+  parseFinal: (toolName: string, args: unknown) => TFinal,
+): { ok: true; final: TFinal } | { ok: false; error: string } {
+  const parsedFinals: TFinal[] = [];
+
+  for (const call of finalCalls) {
+    try {
+      parsedFinals.push(parseFinal(call.function.name, parseJsonArgs(call.function.arguments)));
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: `Duplicate final output was invalid: ${error}` };
+    }
+  }
+
+  if (parsedFinals.length === 0) return { ok: false, error: "Duplicate final output was empty." };
+  const first = JSON.stringify(parsedFinals[0]);
+  if (parsedFinals.every((final) => JSON.stringify(final) === first)) return { ok: true, final: parsedFinals[0] };
+  return { ok: false, error: "Duplicate final outputs disagreed." };
+}
+
 function defaultToolChoice(tools: RuntimeTool[], finalToolNames: string[]): ChatOptions["tool_choice"] {
   if (tools.length === 1 && finalToolNames.includes(tools[0].name)) {
-    return { type: "function" as const, function: { name: finalToolNames[0] } };
+    return "required" as const;
   }
   return "auto" as const;
 }

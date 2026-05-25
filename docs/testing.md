@@ -147,7 +147,7 @@ bun run dev -- --verbose "can you use MCP right now?"
 Expected:
 
 - cortex planning, organ sense, and cortex step/finalization use native tool calls
-- single-final-tool structured methods use forced named function calls, including `final_cortex_step`
+- single-final-tool structured methods expose only the final tool and use `tool_choice: "required"`, including `final_cortex_step`
 - mixed runtime-tool methods use `auto` and still require runtime tool observations before finalization
 - ordinary turns should not include communications render-pass model traces
 - verbose output includes `--- MODEL TOOL TRACE ---`

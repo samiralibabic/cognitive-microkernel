@@ -154,8 +154,8 @@ Future option: all outbound communication could be funneled through Communicatio
 
 Status: accepted
 
-Decision: use one forced `final_cortex_step` tool with a `decision` field instead of exposing separate cortex continuation and finalization tools.
+Decision: use one `final_cortex_step` tool with a `decision` field instead of exposing separate cortex continuation and finalization tools. Single-final-tool methods expose only that final tool and use `tool_choice: "required"`.
 
-Reason: multi-final-tool control required provider-sensitive `tool_choice: "required"` behavior and created avoidable tool-call failure surface.
+Reason: multi-final-tool control required provider-sensitive final-tool selection and created avoidable failure surface. In live OpenRouter/DeepSeek runs, named-function forcing sometimes returned `finish_reason: null` with no tool calls; `required` with exactly one exposed final tool preserves a single possible final function without adding a repair inference call.
 
-Consequence: the cortex still owns the continue-vs-final decision, but the native tool-call harness can force one named function for the cortex step. Mixed runtime-tool methods keep `auto` and preserve observation-before-finalization.
+Consequence: the cortex still owns the continue-vs-final decision, but the native tool-call harness presents only one final function for the cortex step. Mixed runtime-tool methods keep `auto` and preserve observation-before-finalization.
