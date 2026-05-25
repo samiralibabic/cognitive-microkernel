@@ -48,7 +48,6 @@ export class DrivesOrgan implements Organ {
       (g) => `${g.summary} ${g.status} ${g.next_step ?? ""} ${(g.notes ?? []).join(" ")}`,
       8,
     );
-    const goalIntent = looksGoalRelevant(question.event.content);
 
     return runOrganAnswerHarness({
       llm: this.llm,
@@ -67,7 +66,7 @@ Rules:
 - Do not inject active goals into unrelated user-facing context.
 - Use only provided goals as evidence.`,
         },
-        { role: "user", content: JSON.stringify({ question, candidate_goals: candidates, active_goals: goals.filter((g) => g.status === "active"), likely_goal_relevant: goalIntent }, null, 2) },
+        { role: "user", content: JSON.stringify({ question, candidate_goals: candidates, active_goals: goals.filter((g) => g.status === "active") }, null, 2) },
       ],
     });
   }
@@ -119,8 +118,4 @@ Prefer updating existing active goals over creating duplicates. Reject trivial t
     await this.save(goals);
     return { target: this.name, operation: command.operation, status: "accepted", summary: decision.summary, data: { id: goal.id, summary: goal.summary } };
   }
-}
-
-function looksGoalRelevant(text: string): boolean {
-  return /\b(next step|what should we do|continue|goal|plan|project|build|implement|runtime|organ|agent|open loop|priority|roadmap|done|blocked)\b/i.test(text);
 }

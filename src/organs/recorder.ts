@@ -71,7 +71,6 @@ export class RecorderOrgan implements Organ {
   constructor(private readonly llm: LlmClient) {}
 
   async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
-    const auditRelevant = looksAuditRelevant(`${question.question}\n${question.event.content}`);
     const queryAuditLog: RuntimeTool<Record<string, never>, { summary: string; evidence: unknown[]; warnings: string[] }> = {
       name: "query_audit_log",
       description: "Read and summarize the local append-only audit logs owned by the recorder organ.",
@@ -101,12 +100,11 @@ export class RecorderOrgan implements Organ {
           content: `You are the Recorder organ. You own append-only local audit history.
 Call final_organ_answer with your answer.
 Rules:
-- If audit_relevant=false, final_organ_answer should say recorder is available but this event did not need audit evidence.
 - If the question asks about logs, timestamps, storage, chronology, recorded history, or whether the current turn was stored, call query_audit_log before final_organ_answer.
 - Use only query_audit_log results as evidence for audit/log claims.
 - Bound claims to local runtime logs since state was created or reset.`,
         },
-        { role: "user", content: JSON.stringify({ question, audit_relevant: auditRelevant }, null, 2) },
+        { role: "user", content: JSON.stringify({ question }, null, 2) },
       ],
     });
   }
@@ -281,8 +279,4 @@ function truncate(value: string, maxLength: number): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function looksAuditRelevant(text: string): boolean {
-  return /\b(recorded|recording|record|stored|storage|timestamp|timestamps|timestamped|audit|audited|log|logs|logged|history|chronology|chronological|earliest|latest|what happened in the system|what was logged|what failed|recent recorded|recent turns|recent messages|days? (did|do|have|on|we)|when did we talk|which days)\b/i.test(text);
 }

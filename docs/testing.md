@@ -146,7 +146,9 @@ bun run dev -- --verbose "can you use MCP right now?"
 
 Expected:
 
-- cortex planning, organ sense, and cortex finalization use native tool calls
+- cortex planning, organ sense, and cortex step/finalization use native tool calls
+- single-final-tool structured methods use forced named function calls, including `final_cortex_step`
+- mixed runtime-tool methods use `auto` and still require runtime tool observations before finalization
 - ordinary turns should not include model trace entries for `communications.renderUserResponse`
 - verbose output includes `--- MODEL TOOL TRACE ---`
 - organ answers have string summaries, even if a model output needed normalization
@@ -178,7 +180,7 @@ Expected:
 Failure means:
 
 - final tools can still bypass required evidence-gathering tools
-- `tool_choice` or `parallel_tool_calls` harness settings regressed
+- tool choice or `parallel_tool_calls` harness settings regressed
 
 ## Test-context hygiene
 

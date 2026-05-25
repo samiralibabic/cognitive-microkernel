@@ -23,6 +23,16 @@ const organCommandSchema = {
   },
 };
 
+const uncertaintySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["level", "reason"],
+  properties: {
+    level: { type: "string", enum: ["low", "medium", "high"] },
+    reason: { type: "string" },
+  },
+};
+
 export const finalOrganQuestionsTool = makeFinalTool("final_organ_questions", "Return the targeted organ questions for the first consultation round.", {
   type: "object",
   additionalProperties: false,
@@ -32,32 +42,17 @@ export const finalOrganQuestionsTool = makeFinalTool("final_organ_questions", "R
   },
 });
 
-export const continueConsultationTool = makeFinalTool("continue_consultation", "Request one more targeted consultation round before finalizing.", {
+export const finalCortexStepTool = makeFinalTool("final_cortex_step", "Return the next cortex step: continue consultation or finalize the turn.", {
   type: "object",
   additionalProperties: false,
-  required: ["reason", "questions"],
+  required: ["decision"],
   properties: {
+    decision: { type: "string", enum: ["continue", "final"] },
     reason: { type: "string" },
-    questions: { type: "array", minItems: 1, items: questionSchema },
-  },
-});
-
-export const finalCortexOutputTool = makeFinalTool("final_cortex_output", "Finalize the cortex decision for this turn.", {
-  type: "object",
-  additionalProperties: false,
-  required: ["organCommands"],
-  properties: {
+    questions: { type: "array", items: questionSchema },
     userResponse: { type: "string" },
     organCommands: { type: "array", items: organCommandSchema },
-    uncertainty: {
-      type: "object",
-      additionalProperties: false,
-      required: ["level", "reason"],
-      properties: {
-        level: { type: "string", enum: ["low", "medium", "high"] },
-        reason: { type: "string" },
-      },
-    },
+    uncertainty: uncertaintySchema,
   },
 });
 

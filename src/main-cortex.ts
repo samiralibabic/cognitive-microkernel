@@ -1,8 +1,8 @@
 import type { ConsultationRound, CortexStepOutput, Event, MainCortexOutput, OrganAnswer, OrganInfo, OrganQuestion } from "./schemas";
 import { LlmClient } from "./llm";
-import { continueConsultationTool, finalCortexOutputTool, finalOrganQuestionsTool } from "./harness/final-tools";
+import { finalCortexStepTool, finalOrganQuestionsTool } from "./harness/final-tools";
 import { runToolCallingLoop, ToolProtocolError } from "./harness/tool-loop";
-import { validateContinueConsultation, validateMainCortexOutput, validateOrganQuestionOutput, type ToolTraceRecorder } from "./harness/tooling";
+import { validateCortexStepOutput, validateOrganQuestionOutput, type ToolTraceRecorder } from "./harness/tooling";
 
 export class MainCortex {
   constructor(private readonly llm: LlmClient) {}
@@ -48,7 +48,6 @@ Rules:
   }
 
   async stepAfterConsultation(event: Event, rounds: ConsultationRound[], canContinue: boolean, recorder?: ToolTraceRecorder): Promise<CortexStepOutput> {
-    const tools = canContinue ? [continueConsultationTool, finalCortexOutputTool] : [finalCortexOutputTool];
     try {
       const result = await runToolCallingLoop<CortexStepOutput>({
         llm: this.llm,
@@ -58,7 +57,7 @@ Rules:
             content: `You are the Main Cortex in an organ-based agent runtime.
 You have received one or more consultation rounds. A consultation round is one cortex-to-organ question batch followed by one organ-to-cortex answer batch.
 Decide whether to finalize now or ask one more targeted consultation round.
-Call exactly one final tool: ${canContinue ? "continue_consultation or final_cortex_output" : "final_cortex_output"}.
+Call final_cortex_step with decision="continue" or decision="final". Do not answer in prose.
 
 Consultation rules:
 - Cortex remains the only coordinator. Organs do not talk to each other.
@@ -92,12 +91,9 @@ Final-answer rules:
           },
           { role: "user", content: JSON.stringify({ event, rounds, canContinue }, null, 2) },
         ],
-        tools,
-        finalToolNames: tools.map((tool) => tool.name),
-        parseFinal: (toolName, finalArgs) => {
-          if (toolName === continueConsultationTool.name) return validateContinueConsultation(finalArgs);
-          return { ...validateMainCortexOutput(finalArgs), type: "final" };
-        },
+        tools: [finalCortexStepTool],
+        finalToolNames: [finalCortexStepTool.name],
+        parseFinal: (_toolName, finalArgs) => validateCortexStepOutput(finalArgs, canContinue),
         maxSteps: 2,
         temperature: 0.2,
         recorder,
@@ -110,9 +106,9 @@ Final-answer rules:
       if (!(err instanceof ToolProtocolError)) throw err;
       return {
         type: "final",
-        userResponse: "I am uncertain because I could not get reliable structured evidence for this turn.",
+        userResponse: "There was a structured tool-call failure in this turn. The model did not return the required tool call, so I cannot complete the normal cortex step.",
         organCommands: [],
-        uncertainty: { level: "high", reason: "structured_cortex_output_unavailable" },
+        uncertainty: { level: "high", reason: "structured_tool_call_failure" },
       };
     }
   }

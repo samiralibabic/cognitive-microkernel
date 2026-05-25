@@ -171,7 +171,6 @@ function defaultToolChoice(tools: RuntimeTool[], finalToolNames: string[]): Chat
   if (tools.length === 1 && finalToolNames.includes(tools[0].name)) {
     return { type: "function" as const, function: { name: finalToolNames[0] } };
   }
-  if (tools.length > 1 && finalToolNames.length > 0) return "required";
   return "auto" as const;
 }
 

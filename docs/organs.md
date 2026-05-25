@@ -4,6 +4,8 @@ An organ is a specialist LLM-backed subsystem with bounded responsibility and ow
 
 A database, vector index, helper function, or JSON file is not an organ. Those are implementation details inside an organ.
 
+Implementation details may expose state or bounded candidate resources, but they must not decide intent, relevance, or meaning with keyword heuristics. Those judgments belong to the LLM-backed organ.
+
 ## LLM-backed sense contract
 
 LLM-backed `sense()` calls use the native tool-calling harness and must return through `final_organ_answer`. The runtime validates and normalizes that final output before the cortex sees it.

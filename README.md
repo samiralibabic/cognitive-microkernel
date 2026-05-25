@@ -10,7 +10,7 @@ event
   -> cortex plans consultation round 1 via final_organ_questions
   -> selected organs answer via final_organ_answer
   -> cortex finalizes or requests one targeted round 2
-  -> cortex finalizes via final_cortex_output
+  -> cortex steps/finalizes via final_cortex_step
   -> runtime emits cortex userResponse directly
   -> organ commands execute
   -> recorder logs commands, model traces, and completion
@@ -34,9 +34,9 @@ The current prototype demonstrates:
 
 ## How model calls work now
 
-The runtime uses native tool calls for cortex planning, cortex finalization, and organ sense answers. The final user-facing response is emitted directly from the cortex output to avoid an extra model-call failure point. Structured control data comes from explicit final tools such as `final_organ_questions`, `final_organ_answer`, `continue_consultation`, and `final_cortex_output`.
+The runtime uses native tool calls for cortex planning, cortex step/finalization, and organ sense answers. The final user-facing response is emitted directly from the cortex output to avoid an extra model-call failure point. Structured control data comes from explicit final tools such as `final_organ_questions`, `final_cortex_step`, and `final_organ_answer`.
 
-When a method exposes both runtime tools and final tools, the harness requires tool output, disables parallel tool calls, executes non-final tools first, and only accepts a final tool after required tool results have been returned to the model. Plain-text `stop` responses are treated as protocol errors for these structured calls.
+When a structured method exposes exactly one final tool and no runtime tools, the harness forces that named function. When a method exposes real runtime tools plus a final tool, the harness uses `auto`, disables parallel tool calls, executes non-final tools first, and only accepts a final tool after required tool results have been returned to the model. Plain-text `stop` responses are treated as protocol errors for these structured calls.
 
 ## What does not work yet
 
@@ -72,7 +72,7 @@ For one-off debugging, verbose mode shows the event, consultation rounds, organ 
 bun run dev -- --verbose "What are you?"
 ```
 
-The provider must expose an OpenAI-compatible chat API.
+The provider must expose an OpenAI-compatible chat API. For OpenRouter debugging, provider pinning can be configured with `LLM_PROVIDER_ONLY`, `LLM_PROVIDER_ALLOW_FALLBACKS`, and `LLM_PROVIDER_REQUIRE_PARAMETERS`.
 
 ## Reset local state
 

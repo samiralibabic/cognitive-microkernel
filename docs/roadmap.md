@@ -36,9 +36,9 @@ Goal: make structured model control flow explicit, traceable, and fail-closed.
 
 Included:
 
-- final tools for cortex planning, cortex finalization, and organ answers
+- final tools for cortex planning, cortex step/finalization, and organ answers
 - final user-facing responses emitted directly from cortex output without communications rendering
-- required tool output for structured calls with multiple allowed tools
+- runtime tool output observation for structured calls with real runtime tools
 - `parallel_tool_calls: false` in the harness
 - observation-before-finalization when runtime tools and final tools appear together
 - protocol-error traces for stop-without-tool and malformed final output

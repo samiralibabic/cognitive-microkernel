@@ -159,10 +159,6 @@ Rules:
 
     const r = decision.record ?? {};
     const content = String(r.content ?? JSON.stringify(command.payload));
-    if (looksTestOnly(content) || looksTestOnly(event.content)) {
-      return { target: this.name, operation: command.operation, status: "accepted", summary: "Ignored test-only context for durable memory.", data: { ignored: true } };
-    }
-
     const record: MemoryRecord = {
       id: makeId("mem"),
       type: String(r.type ?? "note"),
@@ -179,8 +175,4 @@ Rules:
     await this.save(records);
     return { target: this.name, operation: command.operation, status: "accepted", summary: decision.summary, data: { id: record.id } };
   }
-}
-
-function looksTestOnly(text: string): boolean {
-  return /\b(test|stress test|verification|messing with you|just checking|system test)\b/i.test(text);
 }

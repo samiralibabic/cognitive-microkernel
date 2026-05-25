@@ -64,18 +64,53 @@ export type ChatOptions = {
   max_tokens?: number;
 };
 
+export type LlmProviderRouting = {
+  only?: string[];
+  allow_fallbacks?: boolean;
+  require_parameters?: boolean;
+};
+
 export type LlmConfig = {
   baseUrl: string;
   apiKey?: string;
   model: string;
+  provider?: LlmProviderRouting;
 };
 
 export function loadLlmConfig(): LlmConfig {
+  const provider = loadProviderRouting();
   return {
     baseUrl: process.env.LLM_BASE_URL || "https://api.openai.com/v1",
     apiKey: process.env.LLM_API_KEY,
     model: process.env.LLM_MODEL || "gpt-4.1-mini",
+    ...(provider ? { provider } : {}),
   };
+}
+
+function loadProviderRouting(): LlmProviderRouting | undefined {
+  const provider: LlmProviderRouting = {};
+  const only = parseCsvEnv(process.env.LLM_PROVIDER_ONLY);
+  const allowFallbacks = parseBooleanEnv(process.env.LLM_PROVIDER_ALLOW_FALLBACKS);
+  const requireParameters = parseBooleanEnv(process.env.LLM_PROVIDER_REQUIRE_PARAMETERS);
+
+  if (only) provider.only = only;
+  if (allowFallbacks !== undefined) provider.allow_fallbacks = allowFallbacks;
+  if (requireParameters !== undefined) provider.require_parameters = requireParameters;
+
+  return Object.keys(provider).length > 0 ? provider : undefined;
+}
+
+function parseCsvEnv(value: string | undefined): string[] | undefined {
+  const items = value?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+  return items.length ? items : undefined;
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
 }
 
 export class LlmClient {
@@ -96,11 +131,14 @@ export class LlmClient {
     if (opts?.parallel_tool_calls !== undefined) body.parallel_tool_calls = opts.parallel_tool_calls;
     if (opts?.response_format) body.response_format = opts.response_format;
     if (opts?.max_tokens) body.max_tokens = opts.max_tokens;
+    if (this.config.provider) body.provider = this.config.provider;
 
     const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        "HTTP-Referer": "https://samiralibabic.com",
+        "X-OpenRouter-Title": "cortex-microkernel",
         authorization: `Bearer ${this.config.apiKey}`,
       },
       body: JSON.stringify(body),

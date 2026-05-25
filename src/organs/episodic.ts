@@ -47,7 +47,6 @@ export class EpisodicOrgan implements Organ {
   async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const state = await this.load();
     const recent = state.turns.slice(-RECENT_TURNS);
-    const needsContinuity = looksLikeContinuityRequest(question.event.content);
 
     return runOrganAnswerHarness({
       llm: this.llm,
@@ -69,7 +68,7 @@ Rules:
         },
         {
           role: "user",
-          content: JSON.stringify({ question, working_summary: state.working_summary, recent_turns: recent, likely_continuity_request: needsContinuity }, null, 2),
+          content: JSON.stringify({ question, working_summary: state.working_summary, recent_turns: recent }, null, 2),
         },
       ],
     });
@@ -143,8 +142,4 @@ Rules:
 
     return result.summary.slice(0, 6000);
   }
-}
-
-function looksLikeContinuityRequest(text: string): boolean {
-  return /\b(what do you mean|what did you mean|what are you talking about|defined where|where did.*define|last question|last message|previous|earlier|above|before|continue|where were we|what organ|which organ|what was my|what did i|that|this|it)\b/i.test(text);
 }

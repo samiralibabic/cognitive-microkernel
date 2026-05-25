@@ -13,6 +13,8 @@ recorder = append-only audit trail
 
 The cortex is intentionally stateless or near-stateless. Continuity lives in organs.
 
+Judgment belongs to LLM-backed cortex and organs, not keyword heuristics in runtime code. Deterministic code may validate schemas, enforce control-flow invariants, execute explicit tools, persist organ-owned state, and prepare bounded resource views for an organ. It must not infer user intent, relevance, meaning, continuation/finalization, or mutation decisions from hard-coded word lists or regexes.
+
 ## Runtime loop
 
 ```txt
@@ -36,7 +38,9 @@ The Communications organ can still be consulted for style/profile guidance, but 
 
 Model calls use a native OpenAI/OpenRouter-compatible tool-calling harness for structured control decisions. The model may request tool calls, but the runtime validates arguments, executes only tools exposed for that cortex or organ method, returns tool results as `role: "tool"` messages, and stops only when a required final tool returns structured output. Final cortex and organ sense outputs are explicit final tool calls, not free-form JSON text.
 
-When runtime tools and final tools are both available, the harness uses required tool output and `parallel_tool_calls: false`. If one model response contains both non-final tools and `final_*` tools, the runtime executes only the non-final tools, returns a premature-finalization tool warning for the final calls, and does not accept final output until a later model response has observed the tool results.
+Structured methods with exactly one final tool and no runtime tools use forced named function calls. Cortex continuation vs finalization is represented by one `final_cortex_step` tool with a `decision` field, avoiding multi-final-tool control. Methods with real runtime tools use `auto` so the model can call those tools before the final tool.
+
+When runtime tools and final tools are both available, the harness uses `parallel_tool_calls: false`. If one model response contains both non-final tools and `final_*` tools, the runtime executes only the non-final tools, returns a premature-finalization tool warning for the final calls, and does not accept final output until a later model response has observed the tool results.
 
 ## Cortex responsibilities
 
@@ -57,6 +61,7 @@ The cortex should not:
 - inspect every tool directly
 - manually edit organ state
 - claim knowledge that no organ or sensor provided
+- delegate intent or relevance judgment to deterministic keyword matching
 
 ## Organ contract
 
@@ -90,6 +95,8 @@ type OrganAnswer = {
 ```
 
 LLM-backed sense calls return through `final_organ_answer`. The runtime normalizes malformed organ answers by filling the target organ, clamping confidence, preserving array fields, and adding warnings instead of allowing empty or malformed summaries downstream.
+
+The `relevant` and `confidence` fields are model judgments. Runtime code must not pre-fill them from heuristic keyword matching.
 
 ### Act
 

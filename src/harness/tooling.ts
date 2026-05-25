@@ -1,5 +1,5 @@
 import type { LlmTool } from "../llm";
-import type { MainCortexOutput, OrganAnswer, OrganCommand } from "../schemas";
+import type { CortexStepOutput, MainCortexOutput, OrganAnswer, OrganCommand } from "../schemas";
 
 export type RuntimeTool<Args = unknown, Result = unknown> = {
   name: string;
@@ -49,11 +49,6 @@ export type OrganQuestionOutput = {
     question: string;
     constraints?: string[];
   }>;
-};
-
-export type ContinueConsultationOutput = OrganQuestionOutput & {
-  type: "continue";
-  reason: string;
 };
 
 export function toLlmTool(tool: RuntimeTool): LlmTool {
@@ -119,18 +114,6 @@ export function validateOrganQuestionOutput(args: unknown): OrganQuestionOutput 
   };
 }
 
-export function validateContinueConsultation(args: unknown): ContinueConsultationOutput {
-  const obj = requireRecord(args, "continue consultation output");
-  const questions = validateOrganQuestionOutput(obj).questions;
-  if (questions.length === 0) throw new Error("continue_consultation requires at least one question.");
-
-  return {
-    type: "continue",
-    reason: requireString(obj.reason, "reason"),
-    questions,
-  };
-}
-
 export function validateMainCortexOutput(args: unknown): MainCortexOutput {
   const obj = requireRecord(args, "cortex output");
   const output: MainCortexOutput = {
@@ -149,6 +132,35 @@ export function validateMainCortexOutput(args: unknown): MainCortexOutput {
   }
 
   return output;
+}
+
+export function validateCortexStepOutput(args: unknown, canContinue: boolean): CortexStepOutput {
+  const obj = requireRecord(args, "cortex step output");
+  const decision = requireString(obj.decision, "decision");
+
+  if (decision === "continue") {
+    if (!canContinue) throw new Error("decision cannot be continue when canContinue=false.");
+    const questions = validateOrganQuestionOutput({ questions: obj.questions ?? [] }).questions;
+    if (questions.length === 0) throw new Error("decision=continue requires at least one question.");
+    return {
+      type: "continue",
+      reason: requireString(obj.reason, "reason"),
+      questions,
+    };
+  }
+
+  if (decision === "final") {
+    return {
+      ...validateMainCortexOutput({
+        userResponse: obj.userResponse,
+        organCommands: obj.organCommands ?? [],
+        uncertainty: obj.uncertainty,
+      }),
+      type: "final",
+    };
+  }
+
+  throw new Error("decision must be continue or final.");
 }
 
 export function validateOrganCommands(value: unknown): OrganCommand[] {

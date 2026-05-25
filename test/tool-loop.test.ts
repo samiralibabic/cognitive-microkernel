@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 import type { ChatMessage, ChatOptions, LlmChatResponse, LlmClient } from "../src/llm";
-import type { OrganAnswer } from "../src/schemas";
-import { finalOrganAnswerTool } from "../src/harness/final-tools";
+import type { Event, OrganAnswer } from "../src/schemas";
+import { finalCortexStepTool, finalOrganAnswerTool } from "../src/harness/final-tools";
 import { runToolCallingLoop } from "../src/harness/tool-loop";
 import { normalizeOrganAnswer, type RuntimeTool } from "../src/harness/tooling";
+import { MainCortex } from "../src/main-cortex";
 
 function toolCall(id: string, name: string, args: unknown) {
   return {
@@ -36,7 +37,7 @@ test("tool loop observes recorder tool output before accepting final answer", as
       chatCalls.push({ messages: structuredClone(messages) as ChatMessage[], opts });
 
       if (chatCalls.length === 1) {
-        expect(opts?.tool_choice).toBe("required");
+        expect(opts?.tool_choice).toBe("auto");
         expect(opts?.parallel_tool_calls).toBe(false);
         return {
           model: "fake-recorder-model",
@@ -112,4 +113,76 @@ test("tool loop observes recorder tool output before accepting final answer", as
   expect(queryResultIndex).toBeGreaterThanOrEqual(0);
   expect(acceptedFinalIndex).toBeGreaterThan(queryResultIndex);
   expect(prematureFinalIndex).toBeGreaterThanOrEqual(0);
+});
+
+test("cortex step uses one forced final_cortex_step tool", async () => {
+  const chatCalls: Array<{ messages: ChatMessage[]; opts?: ChatOptions }> = [];
+  const fakeLlm = {
+    async chat(messages: ChatMessage[], opts?: ChatOptions): Promise<LlmChatResponse> {
+      chatCalls.push({ messages: structuredClone(messages) as ChatMessage[], opts });
+      return {
+        model: "fake-cortex-model",
+        choices: [{
+          finish_reason: "tool_calls",
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [toolCall("call_step", finalCortexStepTool.name, {
+              decision: "continue",
+              reason: "Need recent-turn context.",
+              questions: [{ target: "episodic", question: "What recent context matters?" }],
+            })],
+          },
+        }],
+      };
+    },
+  } as unknown as LlmClient;
+
+  const event: Event = {
+    id: "evt_test",
+    type: "user_message",
+    content: "what does that mean?",
+    timestamp: "2026-05-25T00:00:00.000Z",
+    source: "test",
+  };
+  const cortex = new MainCortex(fakeLlm);
+  const result = await cortex.stepAfterConsultation(event, [{ round: 1, questions: [], answers: [] }], true);
+
+  expect(result.type).toBe("continue");
+  expect(chatCalls).toHaveLength(1);
+  expect(chatCalls[0].opts?.tools?.map((tool) => tool.function.name)).toEqual([finalCortexStepTool.name]);
+  expect(chatCalls[0].opts?.tool_choice).toEqual({ type: "function", function: { name: finalCortexStepTool.name } });
+});
+
+test("missing tool calls fail closed without an extra retry", async () => {
+  let callCount = 0;
+  const fakeLlm = {
+    async chat(_messages: ChatMessage[], opts?: ChatOptions): Promise<LlmChatResponse> {
+      callCount += 1;
+      expect(opts?.tool_choice).toEqual({ type: "function", function: { name: finalOrganAnswerTool.name } });
+      return {
+        model: "fake-missing-tool-model",
+        choices: [{
+          finish_reason: "stop",
+          message: { role: "assistant", content: "Plain prose instead of a tool call." },
+        }],
+      };
+    },
+  } as unknown as LlmClient;
+
+  await expect(runToolCallingLoop<OrganAnswer>({
+    llm: fakeLlm,
+    messages: [
+      { role: "system", content: "Call final_organ_answer." },
+      { role: "user", content: "Answer." },
+    ],
+    tools: [finalOrganAnswerTool],
+    finalToolNames: [finalOrganAnswerTool.name],
+    parseFinal: (_toolName, finalArgs) => normalizeOrganAnswer(finalArgs, "recorder"),
+    maxSteps: 3,
+    role: "organ",
+    organ: "recorder",
+    method: "sense",
+  })).rejects.toThrow("without a final tool call");
+  expect(callCount).toBe(1);
 });

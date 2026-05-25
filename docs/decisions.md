@@ -24,11 +24,11 @@ Consequence: each turn needs explicit organ consultation and post-turn organ upd
 
 Status: accepted
 
-Decision: an organ is not a CRUD module. It is a specialist agent with bounded responsibility and owned state.
+Decision: an organ is not a CRUD module. It is a specialist agent with bounded responsibility and owned state. Code inside an organ may provide storage, tools, and bounded resource views, but not keyword-heuristic decisions about intent, relevance, or meaning.
 
 Reason: organs need judgment about relevance, mutation, uncertainty, contradiction, and decay.
 
-Consequence: helper functions and storage are implementation details inside organs, not replacements for organs.
+Consequence: helper functions and storage are implementation details inside organs, not replacements for organs or their judgment.
 
 ## 0004 — Add episodic organ
 
@@ -112,7 +112,7 @@ Consequence: model calls now produce traceable tool calls, finish reasons, tool 
 
 Status: accepted
 
-Decision: represent structured method completion as final tools such as `final_organ_questions`, `final_organ_answer`, `continue_consultation`, `final_cortex_output`, and `final_rendered_response`.
+Decision: represent structured method completion as final tools such as `final_organ_questions`, `final_cortex_step`, and `final_organ_answer`.
 
 Reason: final tools give each model method an explicit typed exit path instead of relying on assistant prose.
 
@@ -147,3 +147,13 @@ Decision: emit cortex userResponse directly instead of sending it through a seco
 Reason: the render pass added latency, cost, trace noise, and another strict tool-call failure point after the cortex had already finalized.
 
 Consequence: Communications remains available for style/profile sensing and profile updates, but normal user-visible output comes directly from the cortex.
+
+## 0016 — Avoid multi-final-tool cortex control
+
+Status: accepted
+
+Decision: use one forced `final_cortex_step` tool with a `decision` field instead of exposing separate cortex continuation and finalization tools.
+
+Reason: multi-final-tool control required provider-sensitive `tool_choice: "required"` behavior and created avoidable tool-call failure surface.
+
+Consequence: the cortex still owns the continue-vs-final decision, but the native tool-call harness can force one named function for the cortex step. Mixed runtime-tool methods keep `auto` and preserve observation-before-finalization.

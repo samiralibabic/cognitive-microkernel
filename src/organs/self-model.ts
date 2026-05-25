@@ -62,7 +62,6 @@ export class SelfModelOrgan implements Organ {
 
   async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const state = await this.load();
-    const relevant = looksSelfRelevant(question.event.content) || looksSelfRelevant(question.question);
 
     return runOrganAnswerHarness({
       llm: this.llm,
@@ -82,7 +81,7 @@ Rules:
 - If the event asks about feelings, existence, capabilities, organs, self-awareness, what happened internally, or "what are you", self-model is relevant.
 - Do not invent capabilities not in state.`
         },
-        { role: "user", content: JSON.stringify({ question, self_model: state, likely_self_relevant: relevant }, null, 2) }
+        { role: "user", content: JSON.stringify({ question, self_model: state }, null, 2) }
       ],
     });
   }
@@ -106,8 +105,4 @@ Rules:
 
     return { target: this.name, operation: command.operation, status: "rejected", summary: "Unsupported self-model operation in v0.2." };
   }
-}
-
-function looksSelfRelevant(text: string): boolean {
-  return /\b(self[- ]?aware|self awareness|awareness|capabilit|what are you|who are you|yourself|your own|your internals|on your end|how are you feeling|feelings?|existence|organs?|cortex|runtime|architecture|what do you mean by|defined where|what happened on your end)\b/i.test(text);
 }
