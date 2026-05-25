@@ -1,5 +1,7 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import type { ToolTraceRecorder } from "../harness/tooling";
 import { makeId, nowIso, readJsonFile, writeJsonFile } from "../state";
 
 export type EpisodicTurn = {
@@ -42,37 +44,35 @@ export class EpisodicOrgan implements Organ {
     await writeJsonFile("episodic.json", state);
   }
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const state = await this.load();
     const recent = state.turns.slice(-RECENT_TURNS);
     const needsContinuity = looksLikeContinuityRequest(question.event.content);
 
-    return this.llm.chatJson<OrganAnswer>([
-      {
-        role: "system",
-        content: `You are the Episodic/Working-Memory organ in an organ-based agent runtime.
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Episodic/Working-Memory organ in an organ-based agent runtime.
 You own short-term conversation continuity: recent turns, deictic references, and a rolling working summary.
-Return only valid JSON matching OrganAnswer:
-{
-  "organ":"episodic",
-  "relevant":boolean,
-  "confidence":0-1,
-  "summary":"compact continuity context for the main cortex, or why nothing is relevant",
-  "evidence":[...],
-  "recommendedActions":[...],
-  "warnings":[...]
-}
+Call final_organ_answer with compact continuity context for the main cortex, or why nothing is relevant.
 Rules:
 - Use recent turns and working summary only; do not invent facts.
 - If the user asks "what do you mean", "what was my last question", "defined where", or uses unclear references like "that/this/it", recent context is highly relevant.
 - Do not promote recent details to long-term memory. That is memory organ's job.
 - Return compact context, not full transcript, unless the user explicitly asks for exact previous wording.`,
-      },
-      {
-        role: "user",
-        content: JSON.stringify({ question, working_summary: state.working_summary, recent_turns: recent, likely_continuity_request: needsContinuity }, null, 2),
-      },
-    ], { temperature: 0.1 });
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ question, working_summary: state.working_summary, recent_turns: recent, likely_continuity_request: needsContinuity }, null, 2),
+        },
+      ],
+    });
   }
 
   async act(command: OrganCommand, event: Event): Promise<OrganResult> {

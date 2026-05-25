@@ -1,5 +1,7 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import type { ToolTraceRecorder } from "../harness/tooling";
 import { makeId, nowIso, readJsonFile, writeJsonFile } from "../state";
 import { topMatches } from "../search";
 
@@ -36,7 +38,7 @@ export class DrivesOrgan implements Organ {
   private async load() { return readJsonFile<GoalRecord[]>("goals.json", DEFAULT_GOALS); }
   private async save(goals: GoalRecord[]) { await writeJsonFile("goals.json", goals); }
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const goals = await this.load();
     // Important: score against the event only. Including the generic organ question
     // makes every goal look relevant because the question itself contains words like "goal".
@@ -48,19 +50,26 @@ export class DrivesOrgan implements Organ {
     );
     const goalIntent = looksGoalRelevant(question.event.content);
 
-    return this.llm.chatJson<OrganAnswer>([
-      {
-        role: "system",
-        content: `You are the Drives/Goals organ. You own active goals, larger objectives, open loops, and decision preferences.
-Return only valid JSON matching OrganAnswer.
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Drives/Goals organ. You own active goals, larger objectives, open loops, and decision preferences.
+Call final_organ_answer with your answer.
 Rules:
 - Explain what bigger goal this event belongs to only if the event is actually goal/project/continuation relevant.
 - If the event is casual, generic, or about the system's feelings/identity, return relevant=false unless a goal is directly implicated.
 - Do not inject active goals into unrelated user-facing context.
 - Use only provided goals as evidence.`,
-      },
-      { role: "user", content: JSON.stringify({ question, candidate_goals: candidates, active_goals: goals.filter((g) => g.status === "active"), likely_goal_relevant: goalIntent }, null, 2) },
-    ], { temperature: 0.1 });
+        },
+        { role: "user", content: JSON.stringify({ question, candidate_goals: candidates, active_goals: goals.filter((g) => g.status === "active"), likely_goal_relevant: goalIntent }, null, 2) },
+      ],
+    });
   }
 
   async act(command: OrganCommand, event: Event): Promise<OrganResult> {

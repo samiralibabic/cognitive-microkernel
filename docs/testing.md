@@ -16,7 +16,7 @@ Use chat mode for day-to-day testing without restarting the CLI:
 bun run chat
 ```
 
-Inside chat mode, `/verbose on` and `/verbose off` toggle internal output for subsequent turns. Verbose mode shows the event, organ questions, organ answers, cortex output, command results, and final user response.
+Inside chat mode, `/verbose on` and `/verbose off` toggle internal output for subsequent turns. Verbose mode shows the event, consultation-round organ questions and answers, model tool trace, cortex output, command results, and final user response.
 
 For one-off verbose debugging:
 
@@ -119,16 +119,41 @@ Inside chat:
 Expected:
 
 - recorder is consulted for timestamp, storage, and chronology questions
+- if recorder was not asked in round 1 but another organ indicates missing chronology, cortex may ask recorder in consultation round 2
+- verbose output shows consultation round 2 when a follow-up consultation happens
 - recorder says local logs are timestamped when records exist
 - recorder returns earliest/latest recorded events and days/counts
 - recorder includes recent user-message chronology when extractable
 - response limits claims to local runtime logs since state creation or reset
+- model tool trace includes finish reasons, native finish reasons when provided, tool call names, and usage when provided
 
 Failure means:
 
 - recorder is not being consulted for audit/history questions
+- a needed second consultation round is not shown in verbose output
 - recorder cannot read or summarize its own JSONL logs
 - cortex is ignoring recorder evidence or overclaiming beyond local runtime state
+
+## Native tool calling
+
+Commands:
+
+```bash
+bun run dev -- --verbose "hi"
+bun run dev -- --verbose "can you use MCP right now?"
+```
+
+Expected:
+
+- cortex planning, organ sense, and cortex finalization use native tool calls
+- verbose output includes `--- MODEL TOOL TRACE ---`
+- organ answers have string summaries, even if a model output needed normalization
+- MCP is reported as planned, not implemented or currently executable
+
+Failure means:
+
+- control flow is still relying on free-form JSON text
+- capability status is not being respected
 
 ## Test-context hygiene
 

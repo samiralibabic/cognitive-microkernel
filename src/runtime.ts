@@ -1,5 +1,7 @@
-import type { Event, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "./schemas";
+import type { ConsultationRound, CortexStepOutput, Event, MainCortexOutput, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "./schemas";
 import { LlmClient, loadLlmConfig } from "./llm";
+import type { ToolLoopTraceItem } from "./harness/tool-loop";
+import { normalizeOrganAnswer, type ModelTraceKind, type ModelTracePayload, type ToolTraceRecorder } from "./harness/tooling";
 import { MainCortex } from "./main-cortex";
 import { createOrgans, organInfos } from "./registry";
 import { makeId, nowIso } from "./state";
@@ -10,15 +12,15 @@ export type RunOptions = {
   type?: Event["type"];
 };
 
+export const MAX_CONSULTATION_ROUNDS = 2;
+
 export type RunTurnResult = {
   event: Event;
+  consultationRounds: ConsultationRound[];
   questions: OrganQuestion[];
   answers: OrganAnswer[];
-  cortexOutput: {
-    userResponse?: string;
-    organCommands: OrganCommand[];
-    uncertainty?: { level: "low" | "medium" | "high"; reason: string };
-  };
+  modelTrace: ToolLoopTraceItem[];
+  cortexOutput: MainCortexOutput;
   renderedResponse?: string;
   commandResults: OrganResult[];
 };
@@ -37,34 +39,46 @@ export async function runTurn(content: string, options: RunOptions): Promise<Run
   };
 
   await recorder.record("event_received", event, event);
+  const modelTrace: ToolLoopTraceItem[] = [];
+  const traceRecorder = makeToolTraceRecorder(recorder, event, modelTrace);
 
-  const questions = await cortex.planOrganQuestions(event, organInfos(registry));
-  await recorder.record("organ_questions_planned", event, questions);
+  const consultationRounds: ConsultationRound[] = [];
+  let questions = await cortex.planOrganQuestions(event, organInfos(registry), traceRecorder);
+  await recorder.record("organ_questions_planned", event, { round: 1, questions });
 
-  const answers: OrganAnswer[] = [];
-  for (const q of questions) {
-    const organ = registry.get(q.target);
-    if (!organ) {
-      answers.push({
-        organ: q.target,
-        relevant: false,
-        confidence: 0,
-        summary: `No organ registered with target '${q.target}'.`,
-        warnings: ["Unknown organ target."],
-      });
+  let cortexOutput: MainCortexOutput | undefined;
+  for (let round = 1; round <= MAX_CONSULTATION_ROUNDS; round += 1) {
+    const answers = await askOrgans(questions, registry, traceRecorder);
+    consultationRounds.push({ round, questions, answers });
+    await recorder.record("organ_answers", event, { round, answers });
+
+    const canContinue = round < MAX_CONSULTATION_ROUNDS;
+    const step = await cortex.stepAfterConsultation(event, consultationRounds, canContinue, traceRecorder);
+    await recorder.record("cortex_step", event, { round, canContinue, step });
+
+    if (step.type === "continue" && canContinue && step.questions.length > 0) {
+      questions = step.questions.map((q) => ({ ...q, event }));
+      await recorder.record("organ_questions_planned", event, { round: round + 1, questions });
       continue;
     }
-    const answer = await organ.sense(q);
-    answers.push(answer);
-  }
-  await recorder.record("organ_answers", event, answers);
 
-  const cortexOutput = await cortex.decide(event, answers);
-  await recorder.record("cortex_output", event, cortexOutput);
+    cortexOutput = normalizeFinalOutput(step);
+    await recorder.record("cortex_output", event, { round, output: cortexOutput });
+    break;
+  }
+
+  cortexOutput ??= {
+    userResponse: "I do not have enough consultation evidence to answer confidently.",
+    organCommands: [],
+    uncertainty: { level: "high", reason: "Consultation ended without a final cortex output." },
+  };
+
+  const allQuestions = consultationRounds.flatMap((round) => round.questions);
+  const answers = consultationRounds.flatMap((round) => round.answers);
 
   let renderedResponse: string | undefined;
   if (cortexOutput.userResponse?.trim()) {
-    renderedResponse = await communications.renderUserResponse(event, cortexOutput.userResponse, answers);
+    renderedResponse = await communications.renderUserResponse(event, cortexOutput.userResponse, answers, traceRecorder);
     await recorder.record("communication_rendered", event, renderedResponse);
   }
 
@@ -95,7 +109,56 @@ export async function runTurn(content: string, options: RunOptions): Promise<Run
     commands: commandResults.length,
   });
 
-  return { event, questions, answers, cortexOutput: effectiveCortexOutput, renderedResponse, commandResults };
+  return { event, consultationRounds, questions: allQuestions, answers, modelTrace, cortexOutput: effectiveCortexOutput, renderedResponse, commandResults };
+}
+
+async function askOrgans(questions: OrganQuestion[], registry: Map<string, Organ>, traceRecorder: ToolTraceRecorder): Promise<OrganAnswer[]> {
+  const answers: OrganAnswer[] = [];
+
+  for (const q of questions) {
+    const organ = registry.get(q.target);
+    if (!organ) {
+      answers.push({
+        organ: q.target,
+        relevant: false,
+        confidence: 0,
+        summary: `No organ registered with target '${q.target}'.`,
+        warnings: ["Unknown organ target."],
+      });
+      continue;
+    }
+
+    const answer = await (organ as Organ & { sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> }).sense(q, traceRecorder);
+    answers.push(normalizeOrganAnswer(answer, q.target));
+  }
+
+  return answers;
+}
+
+function makeToolTraceRecorder(
+  recorder: { record(kind: string, event: Event, payload: unknown): Promise<void> },
+  event: Event,
+  modelTrace: ToolLoopTraceItem[],
+): ToolTraceRecorder {
+  return {
+    async record(kind: ModelTraceKind, payload: ModelTracePayload) {
+      modelTrace.push({ kind, ...payload });
+      await recorder.record(kind, event, payload);
+    },
+  };
+}
+
+function normalizeFinalOutput(step: CortexStepOutput): MainCortexOutput {
+  if (step.type === "continue") {
+    return {
+      userResponse: "I do not have enough consultation evidence to answer confidently within this turn's consultation budget.",
+      organCommands: [],
+      uncertainty: { level: "high", reason: step.reason },
+    };
+  }
+
+  const { type: _type, ...output } = step;
+  return { ...output, organCommands: output.organCommands ?? [] };
 }
 
 function withRequiredPostTurnCommands(

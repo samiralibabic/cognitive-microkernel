@@ -1,21 +1,22 @@
-import type { Event, MainCortexOutput, OrganAnswer, OrganInfo, OrganQuestion } from "./schemas";
+import type { ConsultationRound, CortexStepOutput, Event, MainCortexOutput, OrganAnswer, OrganInfo, OrganQuestion } from "./schemas";
 import { LlmClient } from "./llm";
+import { continueConsultationTool, finalCortexOutputTool, finalOrganQuestionsTool } from "./harness/final-tools";
+import { runToolCallingLoop, ToolProtocolError } from "./harness/tool-loop";
+import { validateContinueConsultation, validateMainCortexOutput, validateOrganQuestionOutput, type ToolTraceRecorder } from "./harness/tooling";
 
 export class MainCortex {
   constructor(private readonly llm: LlmClient) {}
 
-  async planOrganQuestions(event: Event, organs: OrganInfo[]): Promise<OrganQuestion[]> {
-    const result = await this.llm.chatJson<{ questions: Array<{ target: string; question: string; constraints?: string[] }> }>([
-      {
-        role: "system",
-        content: `You are the Main Cortex in an organ-based agent runtime.
+  async planOrganQuestions(event: Event, organs: OrganInfo[], recorder?: ToolTraceRecorder): Promise<OrganQuestion[]> {
+    try {
+      const result = await runToolCallingLoop({
+        llm: this.llm,
+        messages: [
+          {
+            role: "system",
+            content: `You are the Main Cortex in an organ-based agent runtime.
 Your job now is only to decide which organs to consult and what to ask them.
-Return only valid JSON:
-{
-  "questions": [
-    {"target":"organ_name","question":"specific question for that organ","constraints":["..."]}
-  ]
-}
+Call final_organ_questions with the targeted question batch.
 Rules:
 - Ask targeted questions.
 - Prefer consulting self_model, episodic, memory, drives, tools, communications, and recorder unless clearly irrelevant.
@@ -26,26 +27,52 @@ Rules:
 - Recorder is relevant for questions about logs, timestamps, storage/recording, recorded history, chronological order, earliest/latest events, what happened in the system, what was logged, or failures.
 - Do not answer the user yet.
 - Do not ask organs to mutate state in this phase.`,
-      },
-      { role: "user", content: JSON.stringify({ event, available_organs: organs }, null, 2) },
-    ], { temperature: 0.1 });
+          },
+          { role: "user", content: JSON.stringify({ event, available_organs: organs }, null, 2) },
+        ],
+        tools: [finalOrganQuestionsTool],
+        finalToolNames: [finalOrganQuestionsTool.name],
+        parseFinal: (_toolName, finalArgs) => validateOrganQuestionOutput(finalArgs),
+        maxSteps: 2,
+        temperature: 0.1,
+        recorder,
+        role: "cortex",
+        method: "planOrganQuestions",
+      });
 
-    return result.questions.map((q) => ({ ...q, event }));
+      return result.final.questions.map((q) => ({ ...q, event }));
+    } catch (err) {
+      if (err instanceof ToolProtocolError) return [];
+      throw err;
+    }
   }
 
-  async decide(event: Event, organAnswers: OrganAnswer[]): Promise<MainCortexOutput> {
-    return this.llm.chatJson<MainCortexOutput>([
-      {
-        role: "system",
-        content: `You are the Main Cortex in an organ-based agent runtime.
-You receive compact signals from specialist LLM organs. Decide what to say to the user, if anything, and what commands to send back to organs.
-Return only valid JSON matching:
-{
- "userResponse":"optional response text; omit or empty for silence",
- "organCommands":[{"target":"self_model|episodic|memory|tools|drives|environment|communications|recorder","operation":"...","payload":{},"reason":"..."}],
- "uncertainty":{"level":"low|medium|high","reason":"..."}
-}
-Rules:
+  async stepAfterConsultation(event: Event, rounds: ConsultationRound[], canContinue: boolean, recorder?: ToolTraceRecorder): Promise<CortexStepOutput> {
+    const tools = canContinue ? [continueConsultationTool, finalCortexOutputTool] : [finalCortexOutputTool];
+    try {
+      const result = await runToolCallingLoop<CortexStepOutput>({
+        llm: this.llm,
+        messages: [
+          {
+            role: "system",
+            content: `You are the Main Cortex in an organ-based agent runtime.
+You have received one or more consultation rounds. A consultation round is one cortex-to-organ question batch followed by one organ-to-cortex answer batch.
+Decide whether to finalize now or ask one more targeted consultation round.
+Call exactly one final tool: ${canContinue ? "continue_consultation or final_cortex_output" : "final_cortex_output"}.
+
+Consultation rules:
+- Cortex remains the only coordinator. Organs do not talk to each other.
+- You may use organ recommendedActions as evidence, but organs do not redirect the turn; you own any continuation decision.
+- If canContinue=false, you must finalize.
+- Continue only if one more organ answer is likely to materially improve the response.
+- Do not continue for vague curiosity.
+- Do not ask broad/general follow-up questions.
+- Ask only the specific organ or organs needed.
+- Use a simple cortex-owned reason label. Do not frame the reason as organ redirection.
+- Do not say you will check, retrieve, ask, or look something up unless you choose continue so the runtime can perform that consultation before the final answer.
+- If you would need more information but cannot continue, finalize with explicit uncertainty.
+
+Final-answer rules:
 - Be decisive and personalized when organ context is sufficient.
 - Avoid generic if/then branching unless uncertainty is genuine and material.
 - If the user asks about your own feelings, identity, existence, capabilities, organs, self-awareness, internals, or what happened "on your end", use self_model context. Do not imply subjective feelings or biological consciousness.
@@ -60,9 +87,46 @@ Rules:
 - Do not directly mutate state; delegate to organs.
 - Do not invent memory/tool/self facts not present in organ answers.
 - If recorder provides audit/history evidence, use it as the source and limit claims to local runtime logs since state creation or reset. Recorder logs are stored local runtime state; distinguish them from the memory organ, but do not call them non-durable when recorder reports stored records. Do not infer that nothing happened before the earliest local log; say only that recorder has no local records before then.
+- Claims about implemented runtime capability require status=implemented from tools organ or direct recorder/environment evidence. Planned or registered-only capabilities must be labeled as planned or not executable.
 - If the event is internal/system and communication is unnecessary, omit userResponse but still command recorder/organs as needed.`,
-      },
-      { role: "user", content: JSON.stringify({ event, organAnswers }, null, 2) },
-    ], { temperature: 0.2 });
+          },
+          { role: "user", content: JSON.stringify({ event, rounds, canContinue }, null, 2) },
+        ],
+        tools,
+        finalToolNames: tools.map((tool) => tool.name),
+        parseFinal: (toolName, finalArgs) => {
+          if (toolName === continueConsultationTool.name) return validateContinueConsultation(finalArgs);
+          return { ...validateMainCortexOutput(finalArgs), type: "final" };
+        },
+        maxSteps: 2,
+        temperature: 0.2,
+        recorder,
+        role: "cortex",
+        method: "stepAfterConsultation",
+      });
+
+      return result.final;
+    } catch (err) {
+      if (!(err instanceof ToolProtocolError)) throw err;
+      return {
+        type: "final",
+        userResponse: "I am uncertain because I could not get reliable structured evidence for this turn.",
+        organCommands: [],
+        uncertainty: { level: "high", reason: "structured_cortex_output_unavailable" },
+      };
+    }
+  }
+
+  async decide(event: Event, organAnswers: OrganAnswer[], recorder?: ToolTraceRecorder): Promise<MainCortexOutput> {
+    const step = await this.stepAfterConsultation(event, [{ round: 1, questions: [], answers: organAnswers }], false, recorder);
+    if (step.type === "continue") {
+      return {
+        userResponse: "I do not have enough consultation evidence to answer confidently.",
+        organCommands: [],
+        uncertainty: { level: "high", reason: step.reason },
+      };
+    }
+    const { type: _type, ...output } = step;
+    return output;
   }
 }

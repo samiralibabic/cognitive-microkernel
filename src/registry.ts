@@ -18,7 +18,7 @@ export type OrganBundle = {
 };
 
 export function createOrgans(llm: LlmClient): OrganBundle {
-  const recorder = new RecorderOrgan();
+  const recorder = new RecorderOrgan(llm);
   const communications = new CommunicationsOrgan(llm);
   const episodic = new EpisodicOrgan(llm);
   const selfModel = new SelfModelOrgan(llm);

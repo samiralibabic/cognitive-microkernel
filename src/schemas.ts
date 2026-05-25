@@ -25,6 +25,12 @@ export type OrganAnswer = {
   warnings?: string[];
 };
 
+export type ConsultationRound = {
+  round: number;
+  questions: OrganQuestion[];
+  answers: OrganAnswer[];
+};
+
 export type OrganCommand = {
   target: string;
   operation: string;
@@ -48,6 +54,22 @@ export type MainCortexOutput = {
     reason: string;
   };
 };
+
+export type CortexContinueOutput = {
+  type: "continue";
+  reason: string;
+  questions: Array<{
+    target: string;
+    question: string;
+    constraints?: string[];
+  }>;
+};
+
+export type CortexFinalOutput = MainCortexOutput & {
+  type?: "final";
+};
+
+export type CortexStepOutput = CortexContinueOutput | CortexFinalOutput;
 
 export type OrganInfo = {
   name: string;

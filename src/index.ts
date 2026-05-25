@@ -43,10 +43,17 @@ function chatHelp() {
 function printVerbose(result: Awaited<ReturnType<typeof runTurn>>) {
   console.log("\n--- EVENT ---");
   console.log(JSON.stringify(result.event, null, 2));
-  console.log("\n--- ORGAN QUESTIONS ---");
-  console.log(JSON.stringify(result.questions, null, 2));
-  console.log("\n--- ORGAN ANSWERS ---");
-  console.log(JSON.stringify(result.answers, null, 2));
+
+  for (const round of result.consultationRounds) {
+    console.log(`\n--- CONSULTATION ROUND ${round.round}: ORGAN QUESTIONS ---`);
+    console.log(JSON.stringify(round.questions, null, 2));
+    console.log(`\n--- CONSULTATION ROUND ${round.round}: ORGAN ANSWERS ---`);
+    console.log(JSON.stringify(round.answers, null, 2));
+  }
+
+  console.log("\n--- MODEL TOOL TRACE ---");
+  console.log(JSON.stringify(result.modelTrace, null, 2));
+
   console.log("\n--- CORTEX OUTPUT ---");
   console.log(JSON.stringify(result.cortexOutput, null, 2));
   console.log("\n--- COMMAND RESULTS ---");
@@ -101,6 +108,10 @@ async function runChat(initialVerbose: boolean) {
     if (input === "/verbose off" || input === "/v off") {
       verbose = false;
       console.log("Verbose output disabled.");
+      continue;
+    }
+    if (input === "/system") {
+      console.log("Usage: /system <message>");
       continue;
     }
     if (input.startsWith("/system ")) {

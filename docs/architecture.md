@@ -19,14 +19,20 @@ The cortex is intentionally stateless or near-stateless. Continuity lives in org
 1. Event arrives.
 2. Recorder logs the event.
 3. Cortex receives the event and organ registry.
-4. Cortex asks selected organs targeted questions.
+4. Cortex asks selected organs targeted questions for consultation round 1.
 5. Organs answer from their own state.
-6. Cortex reasons over compact organ answers.
-7. Communications organ renders a response if needed.
-8. Cortex sends commands back to organs.
-9. Organs update their own state.
-10. Recorder logs commands and results.
+6. Cortex either finalizes or asks one targeted follow-up consultation round.
+7. If requested, selected organs answer consultation round 2.
+8. Cortex finalizes after at most two consultation rounds.
+9. Communications organ renders a response if needed.
+10. Cortex sends commands back to organs.
+11. Organs update their own state.
+12. Recorder logs commands and results.
 ```
+
+The cortex may run up to two consultation rounds before finalizing a response. Round 1 always happens. Round 2 happens only when the cortex needs one more targeted organ answer. Organs never talk to each other; all coordination goes through the cortex.
+
+Model calls use a native OpenAI/OpenRouter-compatible tool-calling harness for structured control decisions. The model may request tool calls, but the runtime validates arguments, executes only tools exposed for that cortex or organ method, returns tool results as `role: "tool"` messages, and stops only when a required final tool returns structured output. Final cortex and organ sense outputs are explicit final tool calls, not free-form JSON text.
 
 ## Cortex responsibilities
 
@@ -78,6 +84,8 @@ type OrganAnswer = {
   warnings?: string[]
 }
 ```
+
+LLM-backed sense calls return through `final_organ_answer`. The runtime normalizes malformed organ answers by filling the target organ, clamping confidence, preserving array fields, and adding warnings instead of allowing empty or malformed summaries downstream.
 
 ### Act
 

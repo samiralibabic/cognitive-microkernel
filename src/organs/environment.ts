@@ -1,5 +1,7 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import type { ToolTraceRecorder } from "../harness/tooling";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
@@ -9,7 +11,7 @@ export class EnvironmentOrgan implements Organ {
 
   constructor(private readonly llm: LlmClient) {}
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const observations: Record<string, unknown> = {
       cwd: process.cwd(),
       has_package_json: existsSync("package.json"),
@@ -23,14 +25,20 @@ export class EnvironmentOrgan implements Organ {
       } catch {}
     }
 
-    return this.llm.chatJson<OrganAnswer>([
-      {
-        role: "system",
-        content: `You are the Environment organ. Judge whether current runtime/project state changes how this event should be handled.
-Return only valid JSON matching OrganAnswer. Do not invent files or system facts.`,
-      },
-      { role: "user", content: JSON.stringify({ question, observations }, null, 2) },
-    ]);
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Environment organ. Judge whether current runtime/project state changes how this event should be handled.
+Call final_organ_answer with your answer. Do not invent files or system facts.`,
+        },
+        { role: "user", content: JSON.stringify({ question, observations }, null, 2) },
+      ],
+    });
   }
 
   async act(command: OrganCommand): Promise<OrganResult> {

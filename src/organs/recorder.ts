@@ -1,4 +1,7 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
+import { LlmClient } from "../llm";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import type { RuntimeTool, ToolTraceRecorder } from "../harness/tooling";
 import { appendJsonl, nowIso, readJsonl } from "../state";
 
 type EventLogEntry = {
@@ -65,32 +68,47 @@ export class RecorderOrgan implements Organ {
   name = "recorder";
   responsibility = "Append-only audit history: events, organ questions, answers, cortex decisions, commands, and command results.";
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  constructor(private readonly llm: LlmClient) {}
+
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const auditRelevant = looksAuditRelevant(`${question.question}\n${question.event.content}`);
-
-    if (!auditRelevant) {
-      return {
-        organ: this.name,
-        relevant: false,
-        confidence: 0.4,
-        summary: "Recorder is available for append-only audit logging. No audit, storage, timestamp, or chronology question was detected.",
-        evidence: [],
-        recommendedActions: [],
-      };
-    }
-
-    const [events, actions] = await Promise.all([this.loadEventLog(), this.loadActionLog()]);
-    const logSummary = summarizeLogState(events, actions, question.event.id);
-
-    return {
-      organ: this.name,
-      relevant: true,
-      confidence: 0.9,
-      summary: buildAuditSummary(logSummary),
-      evidence: [logSummary],
-      recommendedActions: [],
-      warnings: ["Recorder only knows local runtime logs since state was created or last reset; it does not have the user's full ChatGPT history."],
+    const queryAuditLog: RuntimeTool<Record<string, never>, { summary: string; evidence: unknown[]; warnings: string[] }> = {
+      name: "query_audit_log",
+      description: "Read and summarize the local append-only audit logs owned by the recorder organ.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+      validate: () => ({}),
+      execute: async () => {
+        const [events, actions] = await Promise.all([this.loadEventLog(), this.loadActionLog()]);
+        const logSummary = summarizeLogState(events, actions, question.event.id);
+        return {
+          summary: buildAuditSummary(logSummary),
+          evidence: [logSummary],
+          warnings: ["Recorder only knows local runtime logs since state was created or last reset; it does not have the user's full ChatGPT history."],
+        };
+      },
     };
+
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      tools: [queryAuditLog],
+      maxSteps: 3,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Recorder organ. You own append-only local audit history.
+Call final_organ_answer with your answer.
+Rules:
+- If audit_relevant=false, final_organ_answer should say recorder is available but this event did not need audit evidence.
+- If the question asks about logs, timestamps, storage, chronology, recorded history, or whether the current turn was stored, call query_audit_log before final_organ_answer.
+- Use only query_audit_log results as evidence for audit/log claims.
+- Bound claims to local runtime logs since state was created or reset.`,
+        },
+        { role: "user", content: JSON.stringify({ question, audit_relevant: auditRelevant }, null, 2) },
+      ],
+    });
   }
 
   private async loadEventLog(): Promise<EventLogEntry[]> {

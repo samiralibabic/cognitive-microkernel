@@ -1,5 +1,7 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import type { ToolTraceRecorder } from "../harness/tooling";
 import { nowIso, readJsonFile, writeJsonFile } from "../state";
 
 export type SelfModelState = {
@@ -58,24 +60,31 @@ export class SelfModelOrgan implements Organ {
   private async load() { return readJsonFile<SelfModelState>("self-model.json", DEFAULT_STATE); }
   private async save(state: SelfModelState) { await writeJsonFile("self-model.json", state); }
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const state = await this.load();
     const relevant = looksSelfRelevant(question.event.content) || looksSelfRelevant(question.question);
 
-    return this.llm.chatJson<OrganAnswer>([
-      {
-        role: "system",
-        content: `You are the Self-Model organ in an organ-based agent runtime.
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Self-Model organ in an organ-based agent runtime.
 You own operational self-awareness: architecture, organs, capabilities, limitations, identity, and self-model notes.
-Return only valid JSON matching OrganAnswer.
+Call final_organ_answer with your answer.
 Rules:
 - Be precise and non-mystical.
 - Operational self-awareness is not a claim of subjective consciousness.
 - If the event asks about feelings, existence, capabilities, organs, self-awareness, what happened internally, or "what are you", self-model is relevant.
 - Do not invent capabilities not in state.`
-      },
-      { role: "user", content: JSON.stringify({ question, self_model: state, likely_self_relevant: relevant }, null, 2) }
-    ], { temperature: 0.1 });
+        },
+        { role: "user", content: JSON.stringify({ question, self_model: state, likely_self_relevant: relevant }, null, 2) }
+      ],
+    });
   }
 
   async act(command: OrganCommand, event: Event): Promise<OrganResult> {

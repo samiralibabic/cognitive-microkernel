@@ -1,5 +1,9 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
+import { finalRenderedResponseTool } from "../harness/final-tools";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import { runToolCallingLoop, ToolProtocolError } from "../harness/tool-loop";
+import { validateRenderedResponse, type ToolTraceRecorder } from "../harness/tooling";
 import { nowIso, readJsonFile, writeJsonFile } from "../state";
 
 export type CommsProfile = {
@@ -29,31 +33,55 @@ export class CommunicationsOrgan implements Organ {
   private async load() { return readJsonFile<CommsProfile>("comms-profile.json", DEFAULT_PROFILE); }
   private async save(profile: CommsProfile) { await writeJsonFile("comms-profile.json", profile); }
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const profile = await this.load();
-    return {
-      organ: this.name,
-      relevant: true,
-      confidence: 0.92,
-      summary: `Communication profile: ${profile.tone}; length=${profile.default_length}; prefer=${profile.prefer.join(", ")}; avoid=${profile.avoid.join(", ")}.`,
-      evidence: [profile],
-      recommendedActions: question.event.type === "user_message" ? ["Respond to user unless main cortex decides no response is needed."] : ["For system events, silence is acceptable unless user attention is needed."],
-    };
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Communications organ. You own response style and channel behavior.
+Call final_organ_answer with the relevant communication profile and whether a response is appropriate. Do not add new facts.`,
+        },
+        { role: "user", content: JSON.stringify({ question, profile }, null, 2) },
+      ],
+    });
   }
 
-  async renderUserResponse(event: Event, draft: string, organAnswers: OrganAnswer[]): Promise<string> {
+  async renderUserResponse(event: Event, draft: string, organAnswers: OrganAnswer[], recorder?: ToolTraceRecorder): Promise<string> {
     const profile = await this.load();
 
-    const rendered = await this.llm.chatJson<{ response: string }>([
-      {
-        role: "system",
-        content: `You are the Communications organ. Render the main cortex draft for the user.
-Apply the communication profile without adding new facts. Preserve technical accuracy.
-Return only valid JSON: {"response":"..."}`,
-      },
-      { role: "user", content: JSON.stringify({ event, profile, draft, organ_context: organAnswers }, null, 2) },
-    ], { temperature: 0.2 });
-    return rendered.response.trim();
+    try {
+      const rendered = await runToolCallingLoop({
+        llm: this.llm,
+        messages: [
+          {
+            role: "system",
+            content: `You are the Communications organ. Render the main cortex draft for the user.
+Call final_rendered_response with the final response text.
+Apply the communication profile without adding new facts. Preserve technical accuracy.`,
+          },
+          { role: "user", content: JSON.stringify({ event, profile, draft, organ_context: organAnswers }, null, 2) },
+        ],
+        tools: [finalRenderedResponseTool],
+        finalToolNames: [finalRenderedResponseTool.name],
+        parseFinal: (_toolName, finalArgs) => validateRenderedResponse(finalArgs),
+        maxSteps: 2,
+        temperature: 0.2,
+        recorder,
+        role: "organ",
+        organ: this.name,
+        method: "renderUserResponse",
+      });
+
+      return rendered.final.response.trim();
+    } catch (err) {
+      if (!(err instanceof ToolProtocolError)) throw err;
+      return draft.trim();
+    }
   }
 
   async act(command: OrganCommand): Promise<OrganResult> {

@@ -1,5 +1,7 @@
 import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
+import { runOrganAnswerHarness } from "../harness/organ-answer";
+import type { ToolTraceRecorder } from "../harness/tooling";
 import { makeId, nowIso, readJsonFile, writeJsonFile } from "../state";
 import { topMatches } from "../search";
 
@@ -32,7 +34,7 @@ export class MemoryOrgan implements Organ {
     await writeJsonFile("memory.json", records);
   }
 
-  async sense(question: OrganQuestion): Promise<OrganAnswer> {
+  async sense(question: OrganQuestion, recorder?: ToolTraceRecorder): Promise<OrganAnswer> {
     const records = (await this.load()).filter((r) => (r.status ?? "active") === "active");
     const candidates = topMatches(
       `${question.event.content}\n${question.question}`,
@@ -41,23 +43,30 @@ export class MemoryOrgan implements Organ {
       12,
     );
 
-    return this.llm.chatJson<OrganAnswer>([
-      {
-        role: "system",
-        content: `You are the Memory organ in an organ-based agent runtime. You own durable memory.
-Return only valid JSON matching OrganAnswer.
+    return runOrganAnswerHarness({
+      llm: this.llm,
+      organName: this.name,
+      method: "sense",
+      recorder,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: `You are the Memory organ in an organ-based agent runtime. You own durable memory.
+Call final_organ_answer with your answer.
 Rules:
 - Use only candidate memories as evidence.
 - Return relevant=false if no durable memory actually helps.
 - Do not return raw short-term transcript; episodic owns recent continuity.
 - Do not over-activate test-only memories.
 - Evidence may contain internal IDs for the cortex, but the cortex must not expose them to users unless debugging is explicitly requested.`,
-      },
-      {
-        role: "user",
-        content: JSON.stringify({ question, candidate_memories: candidates }, null, 2),
-      },
-    ], { temperature: 0.1 });
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ question, candidate_memories: candidates }, null, 2),
+        },
+      ],
+    });
   }
 
   async act(command: OrganCommand, event: Event): Promise<OrganResult> {
