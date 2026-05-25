@@ -14,9 +14,6 @@ Included:
 - no internal IDs in normal replies
 - clearer “how do you know?” provenance behavior
 - no overclaiming capabilities
-- bounded consultation rounds
-- native tool-calling control outputs
-- model tool trace for verbose debugging
 
 Excluded:
 
@@ -47,7 +44,7 @@ Included:
 
 Done when:
 
-- `bun run test:harness` passes
+- `bun test` passes
 - verbose mode shows model tool trace entries for model calls, tool calls, tool results, and protocol errors
 
 ## Phase 2 — Read-only project awareness

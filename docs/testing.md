@@ -161,8 +161,10 @@ Failure means:
 Command:
 
 ```bash
-bun run test:harness
+bun test
 ```
+
+This uses Bun's built-in test runner. No external test framework or extra test dependency is required.
 
 Expected:
 

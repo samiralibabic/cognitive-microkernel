@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "chat": "bun run src/index.ts --chat",
-    "reset": "rm -rf state && mkdir -p state",
-    "test:harness": "bun run scripts/regression-tool-loop.ts"
+    "reset": "rm -rf state && mkdir -p state"
   },
   "engines": {
     "bun": ">=1.1.0"
