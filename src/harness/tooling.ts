@@ -177,11 +177,6 @@ export function validateOrganCommands(value: unknown): OrganCommand[] {
   });
 }
 
-export function validateRenderedResponse(args: unknown): { response: string } {
-  const obj = requireRecord(args, "rendered response");
-  return { response: requireString(obj.response, "response") };
-}
-
 export function normalizeOrganAnswer(args: unknown, fallbackOrgan: string): OrganAnswer {
   const warnings: string[] = [];
   if (!isRecord(args)) {

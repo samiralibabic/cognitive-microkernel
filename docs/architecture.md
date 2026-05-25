@@ -51,7 +51,7 @@ The cortex should:
 - ask targeted questions
 - combine compact organ answers
 - decide what to do next
-- communicate through the communications organ
+- produce the final `userResponse`, using Communications organ guidance when relevant
 - delegate state updates back to organs
 
 The cortex should not:

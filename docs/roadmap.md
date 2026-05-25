@@ -48,6 +48,10 @@ Done when:
 - `bun test` passes
 - verbose mode shows model tool trace entries for model calls, tool calls, tool results, and protocol errors
 
+Future option:
+
+- funnel all outbound communication through Communications with a strict pass-through contract: preserve cortex intent and claims, adapt only delivery/style/transport, and cover it with tests before reintroducing the extra processing step
+
 ## Phase 2 — Read-only project awareness
 
 Goal: let the system inspect its own project safely.

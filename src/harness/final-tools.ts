@@ -70,12 +70,3 @@ export const finalOrganAnswerTool = makeFinalTool("final_organ_answer", "Return 
     warnings: { type: "array", items: { type: "string" } },
   },
 });
-
-export const finalRenderedResponseTool = makeFinalTool("final_rendered_response", "Return the final user-facing response text.", {
-  type: "object",
-  additionalProperties: false,
-  required: ["response"],
-  properties: {
-    response: { type: "string" },
-  },
-});

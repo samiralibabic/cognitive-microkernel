@@ -1,9 +1,7 @@
-import type { Event, Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
+import type { Organ, OrganAnswer, OrganCommand, OrganQuestion, OrganResult } from "../schemas";
 import { LlmClient } from "../llm";
-import { finalRenderedResponseTool } from "../harness/final-tools";
 import { runOrganAnswerHarness } from "../harness/organ-answer";
-import { runToolCallingLoop, ToolProtocolError } from "../harness/tool-loop";
-import { validateRenderedResponse, type ToolTraceRecorder } from "../harness/tooling";
+import type { ToolTraceRecorder } from "../harness/tooling";
 import { nowIso, readJsonFile, writeJsonFile } from "../state";
 
 export type CommsProfile = {
@@ -49,39 +47,6 @@ Call final_organ_answer with the relevant communication profile and whether a re
         { role: "user", content: JSON.stringify({ question, profile }, null, 2) },
       ],
     });
-  }
-
-  async renderUserResponse(event: Event, draft: string, organAnswers: OrganAnswer[], recorder?: ToolTraceRecorder): Promise<string> {
-    const profile = await this.load();
-
-    try {
-      const rendered = await runToolCallingLoop({
-        llm: this.llm,
-        messages: [
-          {
-            role: "system",
-            content: `You are the Communications organ. Render the main cortex draft for the user.
-Call final_rendered_response with the final response text.
-Apply the communication profile without adding new facts. Preserve technical accuracy.`,
-          },
-          { role: "user", content: JSON.stringify({ event, profile, draft, organ_context: organAnswers }, null, 2) },
-        ],
-        tools: [finalRenderedResponseTool],
-        finalToolNames: [finalRenderedResponseTool.name],
-        parseFinal: (_toolName, finalArgs) => validateRenderedResponse(finalArgs),
-        maxSteps: 2,
-        temperature: 0.2,
-        recorder,
-        role: "organ",
-        organ: this.name,
-        method: "renderUserResponse",
-      });
-
-      return rendered.final.response.trim();
-    } catch (err) {
-      if (!(err instanceof ToolProtocolError)) throw err;
-      return draft.trim();
-    }
   }
 
   async act(command: OrganCommand): Promise<OrganResult> {

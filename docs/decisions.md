@@ -148,6 +148,8 @@ Reason: the render pass added latency, cost, trace noise, and another strict too
 
 Consequence: Communications remains available for style/profile sensing and profile updates, but normal user-visible output comes directly from the cortex.
 
+Future option: all outbound communication could be funneled through Communications later, including user and external-system channels, but only with a stricter pass-through contract. Communications must preserve the cortex's intended content and claims, may only adapt delivery/style/transport, and must not add facts or change decisions. Reintroducing such a path would be a deliberate architecture change with explicit tests, not a hidden post-cortex rewrite.
+
 ## 0016 — Avoid multi-final-tool cortex control
 
 Status: accepted

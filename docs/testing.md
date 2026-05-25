@@ -149,7 +149,7 @@ Expected:
 - cortex planning, organ sense, and cortex step/finalization use native tool calls
 - single-final-tool structured methods use forced named function calls, including `final_cortex_step`
 - mixed runtime-tool methods use `auto` and still require runtime tool observations before finalization
-- ordinary turns should not include model trace entries for `communications.renderUserResponse`
+- ordinary turns should not include communications render-pass model traces
 - verbose output includes `--- MODEL TOOL TRACE ---`
 - organ answers have string summaries, even if a model output needed normalization
 - MCP is reported as planned, not implemented or currently executable
