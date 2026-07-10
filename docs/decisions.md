@@ -159,3 +159,29 @@ Decision: use one `final_cortex_step` tool with a `decision` field instead of ex
 Reason: multi-final-tool control required provider-sensitive final-tool selection and created avoidable failure surface. In live OpenRouter/DeepSeek runs, named-function forcing sometimes returned `finish_reason: null` with no tool calls; `required` with exactly one exposed final tool preserves a single possible final function without adding a repair inference call.
 
 Consequence: the cortex still owns the continue-vs-final decision, but the native tool-call harness presents only one final function for the cortex step. Mixed runtime-tool methods keep `auto` and preserve observation-before-finalization.
+
+## 0017 — Tests are executable documentation
+
+Status: accepted
+
+Decision: inspect every source file and maintain readable Bun tests that document the behavior and contracts represented by that file.
+
+Reason: tests are the preferred implementation reference for understanding the system without reading every implementation detail.
+
+Consequence: tests should describe observable behavior and architectural invariants clearly, preserve regressions from real failures, and avoid coupling to incidental implementation details where a contract-level assertion is possible.
+
+## 0018 — Evolve cognitive loops in bounded stages
+
+Status: accepted
+
+Decision: evolve from bounded cortex consultation to bounded organ-local loops, and only later to a persistent cortex event loop.
+
+Reason: additional internal turns can improve reasoning, but open-ended loops create latency, compute, state-pollution, and auditability risks.
+
+Consequences:
+
+- organs never communicate directly; all cross-organ coordination remains cortex-owned
+- an organ-local loop may use only that organ's own state and exposed tools
+- every loop starts with a fixed step or round budget rather than a wall-clock budget
+- internal steps must remain visible through recorder/model-tool traces
+- a persistent cortex loop is deferred until permissions, failure handling, drives, communications behavior, and auditability are mature
