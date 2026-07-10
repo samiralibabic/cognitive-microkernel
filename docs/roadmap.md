@@ -132,3 +132,37 @@ Every side effect needs:
 - permission model
 - recorder log
 - clear user-facing explanation when relevant
+
+## Long-term direction — Bounded cognitive loops
+
+The current cortex already supports at most two consultation rounds. Further internal iteration should be introduced in stages rather than as an unbounded loop.
+
+### Stage A — Bounded organ-local loops
+
+An organ may perform several internal model/tool steps before returning one `OrganAnswer` to the cortex.
+
+Boundaries:
+
+- the organ may access only its own state and tools exposed to that organ method
+- organs never communicate directly with other organs
+- cross-organ coordination remains cortex-owned
+- each organ loop starts with a small fixed step budget
+- internal steps and tool results are recorded and visible in verbose/model-tool traces
+- the organ must return a final normalized answer or a structured protocol failure when the budget is exhausted
+
+This stage allows an organ to complete multi-step work without requiring the cortex to micromanage every operation.
+
+### Stage B — Persistent cortex event loop
+
+The later endgame is a cortex that processes an event queue, consults organs, acts or stays silent, updates organs, and waits for the next event.
+
+This is deferred until the runtime has mature:
+
+- permission boundaries
+- organ and provider failure handling
+- drives and goal hygiene
+- communication and silence behavior
+- recorder coverage and auditability
+- bounded-loop tests and regression coverage
+
+The persistent cortex loop must also use explicit step budgets and must not create direct organ-to-organ communication.
