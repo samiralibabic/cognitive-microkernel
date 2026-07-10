@@ -2,6 +2,20 @@
 
 Use real-mode tests as the primary signal. The runtime depends on the configured OpenAI-compatible provider for cortex and organ cognition.
 
+## Testing philosophy
+
+Tests are executable documentation for the system.
+
+For every source file:
+
+- inspect what behavior and contracts the file represents
+- add readable Bun tests that explain that behavior
+- prefer observable contracts and architectural invariants over incidental implementation details
+- preserve regressions for failures that occurred in real runs
+- keep tests understandable to a reader who has not first read the implementation
+
+Coverage should make it possible to understand the runtime through its tests. A source file may be covered directly or through a higher-level contract test when that better describes its role, but every source file must be considered explicitly.
+
 ## CLI UX
 
 Use single-turn mode for isolated checks:
